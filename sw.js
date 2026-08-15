@@ -1,4 +1,4 @@
-const CACHE='tower-registry-v63-official-backup-fixed';
+const CACHE='tower-registry-v64-official-scan-add-saveall';
 const ASSETS=['./','./index.html','./registry.json','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 self.skipWaiting();
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));

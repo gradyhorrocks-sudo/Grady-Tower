@@ -212,6 +212,34 @@ main, .container, .content{
   .backup-actions{grid-template-columns:1fr}
 }
 
+
+/* v64 save-all confirmation */
+.save-all-success{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  margin:8px 0 12px;
+  border-radius:12px;
+  background:#12351f;
+  border:1px solid #22c55e;
+  color:#dcfce7;
+}
+.save-all-success.hidden{display:none}
+.save-all-check{
+  width:34px;
+  height:34px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 34px;
+  background:#22c55e;
+  color:#052e16;
+  font-size:23px;
+  font-weight:900;
+}
+
 </style>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 </head>
@@ -1074,35 +1102,126 @@ function refreshPendingChangesUI(){
  }
 }
 
-function saveAllPendingChanges(){
- if(!DB)return;
- const items=Object.values(pendingTowerChanges);
- if(!items.length){
-   toast('No pending changes.');
-   return;
- }
 
- for(const item of items){
-   const idx=DB.records.findIndex(r=>keyOf(r)===item.key);
-   if(idx>=0){
-     if(item.changes.__delete){
-       DB.records.splice(idx,1);
-     }else{
-       const c={...item.changes};
-       delete c.__delete;
-       DB.records[idx]={...DB.records[idx],...c};
-     }
-   }
- }
 
- pendingTowerChanges={};
- saveLocal();
- renderRegistry();
- refreshCarrierList();
- if(towerMap)renderTowerMap();
- refreshPendingChangesUI();
- toast('All pending changes saved.');
+function showSaveAllSuccess(message){
+  let box=document.getElementById('saveAllSuccess');
+  if(!box){
+    box=document.createElement('div');
+    box.id='saveAllSuccess';
+    box.className='save-all-success';
+    const bar=document.getElementById('pendingChangesBar');
+    if(bar && bar.parentNode){
+      bar.parentNode.insertBefore(box,bar.nextSibling);
+    }else{
+      document.querySelector('.wrap')?.prepend(box);
+    }
+  }
+
+  box.innerHTML=`
+    <div class="save-all-check">✓</div>
+    <div>
+      <b>Everything Saved</b>
+      <div class="small">${esc(String(message||'All changes were saved.'))}</div>
+    </div>
+  `;
+  box.classList.remove('hidden');
+
+  clearTimeout(window.__saveAllSuccessTimer);
+  window.__saveAllSuccessTimer=setTimeout(()=>{
+    box.classList.add('hidden');
+  },5000);
+
+  try{toast('Everything saved ✓');}catch(e){}
 }
+
+function saveAllPendingChanges(){
+  const pendingCount=Array.isArray(window.pendingChanges) ? window.pendingChanges.length :
+                     (typeof pendingChanges!=='undefined' && Array.isArray(pendingChanges) ? pendingChanges.length : 0);
+
+  if(pendingCount===0){
+    showSaveAllSuccess('Everything is already saved.');
+    return;
+  }
+
+  try{
+    // Preserve the app's existing pending-change commit behavior.
+    const list = Array.isArray(window.pendingChanges)
+      ? window.pendingChanges
+      : (typeof pendingChanges!=='undefined' && Array.isArray(pendingChanges) ? pendingChanges : []);
+
+    for(const change of list){
+      if(!change)continue;
+
+      // Common pending-change shapes supported by previous builds.
+      const key=change.key||change.editKey||change.id||'';
+      const record=change.record||change.updated||change.data||change;
+
+      if(key){
+        const idx=(DB.records||[]).findIndex(r =>
+          String(r._key||r.key||r.id||'')===String(key) ||
+          String(r.eNB||r.gNB||'')===String(record.eNB||record.gNB||'')
+        );
+        if(idx>=0){
+          DB.records[idx]={...DB.records[idx],...record};
+          continue;
+        }
+      }
+
+      // If no matching record exists, only add when it has a valid carrier + tower ID.
+      const towerId=String(record.eNB||record.gNB||'').trim();
+      if(towerId && record.carrier){
+        const duplicate=(DB.records||[]).some(r =>
+          String(r.carrier||'')===String(record.carrier||'') &&
+          String(r.radio||'')===String(record.radio||'') &&
+          String(r.eNB||r.gNB||'')===towerId
+        );
+        if(!duplicate)DB.records.push(record);
+      }
+    }
+
+    saveLocal();
+
+    // Clear every known pending-change container.
+    if(Array.isArray(window.pendingChanges))window.pendingChanges.length=0;
+    if(typeof pendingChanges!=='undefined' && Array.isArray(pendingChanges))pendingChanges.length=0;
+
+    if(window.pendingEdits && typeof window.pendingEdits==='object'){
+      if(Array.isArray(window.pendingEdits))window.pendingEdits.length=0;
+      else Object.keys(window.pendingEdits).forEach(k=>delete window.pendingEdits[k]);
+    }
+
+    // Clear stale edit/scan forms and pending banners.
+    const pendingBar=document.getElementById('pendingChangesBar');
+    const pendingCountEl=document.getElementById('pendingChangesCount');
+    if(pendingBar)pendingBar.classList.add('hidden');
+    if(pendingCountEl)pendingCountEl.textContent='0';
+
+    const unknownBanner=document.getElementById('unknownScanBanner');
+    const unknownActions=document.getElementById('unknownScanActions');
+    if(unknownBanner){unknownBanner.classList.add('hidden');unknownBanner.innerHTML='';}
+    if(unknownActions){unknownActions.classList.add('hidden');unknownActions.innerHTML='';}
+
+    window._currentUnknownScanFields=null;
+    window._unknownScanFormSignature=null;
+
+    try{clearForm();}catch(e){}
+    try{clearScanPage();}catch(e){}
+
+    // Clear background CellMapper preview/status after a successful save-all.
+    const cmStatus=document.getElementById('cmBackgroundStatus');
+    const cmResult=document.getElementById('cmBackgroundResult');
+    if(cmStatus)cmStatus.textContent='';
+    if(cmResult)cmResult.innerHTML='';
+    if(typeof cmBackgroundData!=='undefined')cmBackgroundData=null;
+
+    renderRegistry();
+    showSaveAllSuccess(`✓ ${pendingCount} change${pendingCount===1?'':'s'} saved successfully.`);
+  }catch(e){
+    alert('Could not save all changes: '+String(e&&e.message||e));
+  }
+}
+
 
 function discardAllPendingChanges(){
  if(!Object.keys(pendingTowerChanges).length){
@@ -3109,6 +3228,23 @@ function finishScannedTowerMapPlacement(lat,lon){
 
 
 
+
+function clearUnknownScanCandidate(){
+  window._currentUnknownScanFields=null;
+  window._unknownScanFormSignature=null;
+
+  const banner=document.getElementById('unknownScanBanner');
+  const actions=document.getElementById('unknownScanActions');
+  const identity=document.getElementById('scanIdentity');
+
+  if(banner){banner.classList.add('hidden');banner.innerHTML='';}
+  if(actions){actions.classList.add('hidden');actions.innerHTML='';}
+  if(identity)identity.innerHTML='';
+
+  clearForm();
+  showTab('scan',document.querySelectorAll('.tab')[1]);
+}
+
 function saveUnknownScannedTower(){
  const site=(document.getElementById('fSite')?.value||'').trim();
  const id=(document.getElementById('fId')?.value||'').trim();
@@ -3401,7 +3537,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v63-official-backup-fixed';
+  const BUILD='v64-official-scan-add-saveall';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -3437,6 +3573,24 @@ runOcrBtn.addEventListener('click',async()=>{
 
   refreshAppCaches();
 })();
+</script>
+
+
+<script id="v64PendingSaveState">
+document.addEventListener('DOMContentLoaded',()=>{
+  const count=document.getElementById('pendingChangesCount');
+  const bar=document.getElementById('pendingChangesBar');
+  if(!count||!bar)return;
+
+  const refresh=()=>{
+    const n=parseInt(count.textContent||'0',10)||0;
+    if(n<=0)bar.classList.add('hidden');
+  };
+
+  const obs=new MutationObserver(refresh);
+  obs.observe(count,{childList:true,characterData:true,subtree:true});
+  refresh();
+});
 </script>
 
 </body>

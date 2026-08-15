@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <head>
-<!-- Frontend v70: first-time CellMapper workflow diagnostics -->
+<!-- Frontend v71: conditional first-time CellMapper workflow diagnostics -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111827">
@@ -2141,6 +2141,7 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
          <div class="label">System</div><div>${esc(t.system||radio)}</div>
          <div class="label">Backend version</div><div>${esc(data.version||'Not returned')}</div>
          <div class="label">Last human workflow step</div><div>${esc((data.humanUiTrace||[]).slice(-1)[0]?.step||'Not returned')}</div>
+         <div class="label">Workflow mode</div><div>Conditional: absent popups/ads are skipped</div>
          <div class="label">Backend source</div><div>${esc(data.source||data.backendSource||'Not returned')}</div>
          <div class="label">Workflow video</div>
          <div>${data.videoInfo?.base64

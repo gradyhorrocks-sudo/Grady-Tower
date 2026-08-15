@@ -1,3 +1,5 @@
+v71 CONDITIONAL FIRST-TIME WORKFLOW FRONTEND
+
 Master Cellular Tower Registry — OFFICIAL v66
 
 CellMapper lookup now supports:
@@ -17,3 +19,6 @@ the UI reports a lookup error instead of falsely turning it red or claiming the
 tower is absent. That is an execution error, not a fourth tower status.
 
 v65 Save All fixes and compact PIN-protected Backup behavior are preserved.
+
+
+Preserves v70 UI and video diagnostics. Displays that optional first-visit popups/ads are skipped when absent.

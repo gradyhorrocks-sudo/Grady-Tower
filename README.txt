@@ -420,3 +420,9 @@ SPARSE LTE CELL-ID SCAN:
 SMALL SCAN PREVIEW:
 - Pasted/uploaded scan images display as a compact 110x82 px thumbnail so form text and controls remain readable.
 - OCR still processes the original full-resolution image; only the on-screen preview is reduced.
+
+REMOTE BACKEND TEST v55:
+- Frontend remains on GitHub Pages.
+- Background CellMapper lookup calls a separately hosted backend URL.
+- Configure under Backup > Background Lookup Backend.
+- Test Backend verifies the remote health endpoint.

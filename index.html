@@ -345,7 +345,7 @@ Use 4G LTE for eNB searches and 5G NR for gNB searches.
 <div class="card" style="margin-top:12px">
 <h3>Background CellMapper Test</h3>
 <div class="small muted">
-This test stays inside Tower Registry. After a scan it sends PLMN, LTE/5G, eNB/gNB and TAC to the Netlify backend.
+This test stays inside Tower Registry. After a scan it sends PLMN, LTE/5G, eNB/gNB and TAC to your separately hosted backend.
 If CellMapper returns usable tower data, the fields are previewed here and can be transferred into Add/Edit.
 </div>
 <div class="row" style="margin-top:8px">
@@ -553,6 +553,20 @@ Map pin colors:
 
 </div>
 <div class="notice small" style="margin-top:12px"><b>PIN note:</b> This app requires PIN 159357 only the first time on each device/browser. After successful entry, that device is trusted in local storage until its site data is cleared or trust is manually revoked. This is still an app-level lock only; GitHub Pages is static hosting.</div>
+
+<div class="card" style="margin-top:14px">
+<h2>Background Lookup Backend</h2>
+<div class="small muted">
+Tower Registry stays on GitHub Pages. Paste the separate backend URL here once and the app will use it for background CellMapper lookups.
+</div>
+<label>Backend base URL</label>
+<input id="remoteBackendUrl" placeholder="https://your-backend-site.netlify.app">
+<div class="row" style="margin-top:8px">
+<button type="button" onclick="saveRemoteBackendUrl()">Save Backend URL</button>
+<button type="button" class="secondary" onclick="testRemoteBackend()">Test Backend</button>
+</div>
+<div id="remoteBackendStatus" class="small muted" style="margin-top:8px"></div>
+</div>
 </section>
 </div>
 <datalist id="carrierList"></datalist>
@@ -1518,6 +1532,50 @@ function normalizeCellMapperTower(raw){
  };
 }
 
+
+const REMOTE_BACKEND_KEY='towerRegistryRemoteBackendUrl';
+
+function normalizeBackendUrl(v){
+ return String(v||'').trim().replace(/\/+$/,'');
+}
+function getRemoteBackendUrl(){
+ return normalizeBackendUrl(localStorage.getItem(REMOTE_BACKEND_KEY)||'');
+}
+function saveRemoteBackendUrl(){
+ const input=document.getElementById('remoteBackendUrl');
+ const status=document.getElementById('remoteBackendStatus');
+ const url=normalizeBackendUrl(input?.value||'');
+ if(!url){
+   localStorage.removeItem(REMOTE_BACKEND_KEY);
+   if(status)status.textContent='Backend URL cleared.';
+   return;
+ }
+ if(!/^https:\/\//i.test(url)){
+   if(status)status.textContent='Use an https:// backend URL.';
+   return;
+ }
+ localStorage.setItem(REMOTE_BACKEND_KEY,url);
+ if(status)status.textContent='Backend URL saved on this device.';
+}
+async function testRemoteBackend(){
+ const status=document.getElementById('remoteBackendStatus');
+ const base=getRemoteBackendUrl();
+ if(!base){if(status)status.textContent='Save a backend URL first.';return;}
+ if(status)status.textContent='Testing backend…';
+ try{
+   const r=await fetch(base+'/.netlify/functions/health',{cache:'no-store'});
+   const data=await r.json();
+   if(r.ok&&data.ok){if(status)status.textContent='Backend connected ✓';}
+   else{if(status)status.textContent='Backend responded, but health check failed.';}
+ }catch(e){
+   if(status)status.textContent='Could not reach backend. Check the URL and deployment.';
+ }
+}
+document.addEventListener('DOMContentLoaded',()=>{
+ const input=document.getElementById('remoteBackendUrl');
+ if(input)input.value=getRemoteBackendUrl();
+});
+
 async function runBackgroundCellMapperLookup(fieldsOverride){
  const status=document.getElementById('cmBackgroundStatus');
  const result=document.getElementById('cmBackgroundResult');
@@ -1537,7 +1595,12 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
  if(result)result.innerHTML='';
 
  try{
-   const r=await fetch('/.netlify/functions/cellmapper-lookup',{
+   const backend=getRemoteBackendUrl();
+   if(!backend){
+     if(status)status.textContent='No background backend configured. Open Backup and save the backend URL first.';
+     return;
+   }
+   const r=await fetch(backend+'/.netlify/functions/cellmapper-lookup',{
      method:'POST',
      headers:{'content-type':'application/json'},
      body:JSON.stringify({plmn,radio,towerId,tac})
@@ -1581,7 +1644,7 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
    }
  }catch(e){
    cmBackgroundData=null;
-   if(status)status.textContent='Background function could not be reached. This test must be deployed on Netlify, not GitHub Pages.';
+   if(status)status.textContent='Background backend could not be reached. Open Backup and verify the separate backend URL.';
  }
 }
 

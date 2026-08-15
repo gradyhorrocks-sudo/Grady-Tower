@@ -1,4 +1,4 @@
-const CACHE='tower-registry-v68-video-download';
+const CACHE='tower-registry-v69-video-download-direct';
 const ASSETS=['./registry.json','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
 self.skipWaiting();

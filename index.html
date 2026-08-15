@@ -1,6 +1,7 @@
 <!doctype html>
 <html>
 <head>
+<!-- Frontend v69: direct video download fix -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111827">
@@ -1862,9 +1863,7 @@ async function testRemoteBackend(){
    const r=await fetch(base+'/.netlify/functions/health',{cache:'no-store'});
    const data=await r.json();
    cmFullDiagnosticData=data;
-   lastCellMapperVideo=(data?.videoInfo?.included && data?.videoInfo?.base64)
-     ? data.videoInfo
-     : null;
+   lastCellMapperVideo=data?.videoInfo||null;
    if(r.ok&&data.ok){if(status)status.textContent='Backend connected ✓';}
    else{if(status)status.textContent='Backend responded, but health check failed.';}
  }catch(e){
@@ -1960,27 +1959,38 @@ function autoFillVerifiedCellMapperTower(data, normalized, requested){
 let lastCellMapperVideo=null;
 
 function downloadLastCellMapperVideo(){
-  const v=lastCellMapperVideo;
-  if(!v || !v.base64){
-    alert('No CellMapper workflow video was returned for this lookup.');
+  const v=cmFullDiagnosticData?.videoInfo || lastCellMapperVideo || null;
+
+  if(!v){
+    alert('No CellMapper workflow video metadata was returned for this lookup.');
     return;
   }
 
-  const binary=atob(v.base64);
-  const bytes=new Uint8Array(binary.length);
-  for(let i=0;i<binary.length;i++){
-    bytes[i]=binary.charCodeAt(i);
+  if(!v.base64){
+    const detail=v.note ? `\n\nBackend: ${v.note}` : '';
+    alert('The backend returned video metadata but no embedded video data.'+detail);
+    return;
   }
 
-  const blob=new Blob([bytes],{type:v.mime||'video/webm'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=v.fileName||'CellMapper_Workflow.webm';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),3000);
+  try{
+    const binary=atob(v.base64);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++){
+      bytes[i]=binary.charCodeAt(i);
+    }
+
+    const blob=new Blob([bytes],{type:v.mime||'video/webm'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=v.fileName||'CellMapper_Workflow.webm';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  }catch(e){
+    alert('The CellMapper video was returned, but the browser could not decode it: '+String(e?.message||e));
+  }
 }
 
 function cellMapperFinalStatus(data){
@@ -2132,7 +2142,7 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
          <div class="label">Backend version</div><div>${esc(data.version||'Not returned')}</div>
          <div class="label">Backend source</div><div>${esc(data.source||data.backendSource||'Not returned')}</div>
          <div class="label">Workflow video</div>
-         <div>${data.videoInfo?.included
+         <div>${data.videoInfo?.base64
            ? `<button class="btn secondary" onclick="downloadLastCellMapperVideo()">Download Video</button>`
            : esc(data.videoInfo?.note||'Not returned')}</div>
        </div>

@@ -333,7 +333,7 @@ main, .container, .content{
 <h2>CellMapper Tower Lookup</h2>
 <div class="small muted">
 Enter the carrier, network type, and eNB/gNB. The app builds the correct CellMapper map for that carrier.
-Use 4G LTE for eNB searches and 5G NR for gNB searches.
+Use 4G LTE for eNB searches, 3G UMTS for NodeB searches, and 5G NR for gNB searches.
 </div>
 <div style="margin-top:10px">
 <label>Automatic CellMapper Lookup</label>
@@ -368,6 +368,7 @@ Use 4G LTE for eNB searches and 5G NR for gNB searches.
 <label>Network</label>
 <select id="cmRadio">
 <option value="LTE">4G LTE</option>
+<option value="UMTS">3G UMTS</option>
 <option value="NR">5G NR</option>
 </select>
 </div>
@@ -387,7 +388,7 @@ Use 4G LTE for eNB searches and 5G NR for gNB searches.
 <div class="card" style="margin-top:12px">
 <h3>CellMapper Verified Autofill</h3>
 <div class="small muted">
-Tower Registry can check CellMapper in the background using the selected carrier, LTE/5G, and eNB/gNB. Green verified towers can automatically fill the tower ID and coordinates into Add/Edit.
+Tower Registry can check CellMapper in the background using the selected carrier, LTE/3G/5G, and tower ID. Green verified towers can automatically fill the tower ID and coordinates into Add/Edit.
 </div>
 <div class="row" style="margin-top:8px">
 <button type="button" onclick="runBackgroundCellMapperLookup()">Run Background Lookup</button>
@@ -1951,17 +1952,9 @@ function autoFillVerifiedCellMapperTower(data, normalized, requested){
 
 
 
+
 function cellMapperFinalStatus(data){
-  const exists=Boolean(
-    data?.exactSiteMatched===true ||
-    data?.getSiteMatched===true ||
-    data?.getTowersMatched===true
-  );
-
-  if(!exists){
-    return {key:'not-in-cellmapper',label:'Not in CellMapper',verified:false,markerColor:''};
-  }
-
+  const backendStatus=String(data?.cellMapperStatus||'').trim().toLowerCase();
   const color=String(
     data?.cellMapperMarkerColor ||
     data?.markerColor ||
@@ -1970,18 +1963,22 @@ function cellMapperFinalStatus(data){
     ''
   ).toLowerCase();
 
-  const verification=String(
-    data?.verification ||
-    data?.raw?.verification ||
-    ''
-  ).toLowerCase();
+  if(backendStatus==='not in cellmapper' || data?.humanTowerExists===false){
+    return {key:'not-in-cellmapper',label:'Not in CellMapper',verified:false,markerColor:''};
+  }
 
-  if(color==='green' || verification==='verified' || data?.verified===true || data?.cellMapperVerified===true){
+  if(backendStatus==='verified' || color==='green' || data?.verification==='verified'){
     return {key:'verified',label:'Verified',verified:true,markerColor:'green'};
   }
 
-  return {key:'unverified',label:'Unverified',verified:false,markerColor:'red'};
+  if(backendStatus==='unverified' || color==='red' || data?.verification==='unverified'){
+    return {key:'unverified',label:'Unverified',verified:false,markerColor:'red'};
+  }
+
+  // This is a lookup failure, NOT a fourth CellMapper tower state.
+  return {key:'lookup-error',label:'Could not read CellMapper tower color',verified:false,markerColor:''};
 }
+
 
 async function runBackgroundCellMapperLookup(fieldsOverride){
  const status=document.getElementById('cmBackgroundStatus');
@@ -1989,7 +1986,7 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
 
  const plmn=(fieldsOverride?.plmn || document.getElementById('cmPlmn')?.value || '').replace(/\D/g,'');
  const panelRadio=document.getElementById('cmRadio')?.value||'LTE';
- const radio=fieldsOverride?.radio || (panelRadio==='NR'?'5G':'LTE');
+ const radio=fieldsOverride?.radio || (panelRadio==='NR'?'5G':(panelRadio==='UMTS'?'3G':'LTE'));
  const towerId=String(fieldsOverride?.sid || document.getElementById('cmTowerId')?.value || '').trim();
  const tac=String(fieldsOverride?.tac || '').trim();
 
@@ -2044,9 +2041,12 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
      normalized.markerColor='red';
      cmBackgroundData=normalized;
      if(status)status.textContent='CellMapper RED / UNVERIFIED — tower exists in CellMapper but is not verified.';
-   }else{
+   }else if(cmState.key==='not-in-cellmapper'){
      cmBackgroundData=null;
      if(status)status.textContent='Not in CellMapper';
+   }else{
+     cmBackgroundData=null;
+     if(status)status.textContent='CellMapper found the tower, but the visible marker color could not be read. Lookup was not saved as red or green.';
    }
 
    if(result){
@@ -2164,7 +2164,7 @@ function buildCellMapperUrl(){
  const radio=document.getElementById('cmRadio')?.value||'LTE';
  const ids=parsePlmnForCellMapper(plmn);
  if(!ids)return null;
- const type=radio==='NR'?'NR':'LTE';
+ const type=radio==='NR'?'NR':(radio==='UMTS'?'UMTS':'LTE');
  return `https://www.cellmapper.net/map?MCC=${encodeURIComponent(ids.mcc)}&MNC=${encodeURIComponent(ids.mnc)}&type=${encodeURIComponent(type)}&showTowers=true&showIcons=true&showTowerLabels=true&clusterEnabled=true&tilesEnabled=true&showOrphans=false&showNoFrequencyOnly=false&showFrequencyOnly=false&showBandwidthOnly=false&DateFilterType=Last&showHex=false&showVerifiedOnly=false&showUnverifiedOnly=false&showLTECAOnly=false&showENDCOnly=false&showBand=0&showSectorColours=true&mapType=roadmap&darkMode=false&imperialUnits=false`;
 }
 
@@ -2185,13 +2185,13 @@ function previewCellMapperSearch(){
    return;
  }
 
- const typeLabel=radio==='NR'?'5G NR':'4G LTE';
+ const typeLabel=radio==='NR'?'5G NR':(radio==='UMTS'?'3G UMTS':'4G LTE');
  out.innerHTML=`<div class="card result ok">
    <h3>${esc(carrier==='custom'?'Future / Custom Carrier':carrier)} CellMapper Search</h3>
    <div class="kv">
      <div class="label">PLMN</div><div>${esc(plmn)}</div>
      <div class="label">Network</div><div>${typeLabel}</div>
-     <div class="label">${radio==='NR'?'gNB':'eNB'}</div><div>${esc(id)}</div>
+     <div class="label">${radio==='NR'?'gNB':(radio==='UMTS'?'NodeB':'eNB')}</div><div>${esc(id)}</div>
    </div>
    <div style="margin-top:10px">
      Open CellMapper, tap <b>Search → Tower Search</b>, enter <b>${esc(id)}</b>, then open the returned tower.
@@ -3564,7 +3564,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v65-official-three-state-saveall';
+  const BUILD='v66-official-human-cellmapper';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

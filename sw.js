@@ -1,4 +1,4 @@
-const CACHE='tower-registry-v65-official-three-state-saveall';
+const CACHE='tower-registry-v66-official-human-cellmapper';
 const ASSETS=['./','./index.html','./registry.json','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 self.skipWaiting();
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));

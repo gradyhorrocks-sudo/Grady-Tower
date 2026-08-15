@@ -35,6 +35,15 @@ function detectDeviceLayout(){
 document.addEventListener('DOMContentLoaded',detectDeviceLayout);
 window.addEventListener('orientationchange',()=>setTimeout(detectDeviceLayout,150));
 
+
+// SEARCH_RESULT_EDIT_v48
+document.addEventListener('click',e=>{
+ const btn=e.target.closest('[data-search-edit-key]');
+ if(!btn)return;
+ e.preventDefault();
+ openSearchResultInEdit(btn.getAttribute('data-search-edit-key'));
+});
+
 </script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <title>Master Cellular Tower Registry</title>
@@ -194,7 +203,7 @@ main, .container, .content{
 <section id="tab-lookup">
 <div class="card">
 <h3>Search Towers</h3>
-<p class="muted small">Search anything you know about a tower. Matches can come from tower name, carrier, PLMN, LTE/5G, eNB/gNB, Cell ID/NCI, sector/local cell, PCI, TAC, band, bandwidth, status, notes, coordinates, or verification state. Numeric searches also run LTE /256 and 5G /4096 math.</p>
+<p class="muted small">Search anything you know about a tower. Tap Add/Edit Info on any result to open that exact tower and add missing data. Matches can come from tower name, carrier, PLMN, LTE/5G, eNB/gNB, Cell ID/NCI, sector/local cell, PCI, TAC, band, bandwidth, status, notes, coordinates, or verification state. Numeric searches also run LTE /256 and 5G /4096 math.</p>
 
 <div class="grid">
 <div>
@@ -295,6 +304,20 @@ Use 4G LTE for eNB searches and 5G NR for gNB searches.
 </div>
 
 <div id="cmSearchPreview" style="margin-top:10px"></div>
+<div class="card" style="margin-top:12px">
+<h3>Background CellMapper Test</h3>
+<div class="small muted">
+This test stays inside Tower Registry. After a scan it sends PLMN, LTE/5G, eNB/gNB and TAC to the Netlify backend.
+If CellMapper returns usable tower data, the fields are previewed here and can be transferred into Add/Edit.
+</div>
+<div class="row" style="margin-top:8px">
+<button type="button" onclick="runBackgroundCellMapperLookup()">Run Background Lookup</button>
+<button type="button" class="secondary" onclick="fillBackgroundCellMapperIntoForm()">Fill Add/Edit</button>
+</div>
+<div id="cmBackgroundStatus" class="small muted" style="margin-top:8px"></div>
+<div id="cmBackgroundResult" style="margin-top:8px"></div>
+</div>
+
 
 <div class="notice small" style="margin-top:10px">
 <b>Test workflow:</b> Every successful scan automatically fills this CellMapper section during testing. CellMapper opens on the correct carrier and LTE/NR map. Use Tower Search there and enter the same eNB/gNB.
@@ -1092,6 +1115,54 @@ function registryPlmnForRecord(r){
  return '';
 }
 
+
+function openSearchResultInEdit(k){
+ const base=DB.records.find(r=>keyOf(r)===k);
+ if(!base)return;
+
+ // If this record already has pending edits, load the effective preview.
+ const r=(typeof getEffectiveRecord==='function') ? getEffectiveRecord(base) : base;
+
+ showTab('add',document.querySelectorAll('.tab')[4]);
+ if(typeof clearForm==='function')clearForm();
+
+ const plmn=(typeof registryPlmnForRecord==='function') ? registryPlmnForRecord(r) :
+   (r.plmn || ((DB&&DB.plmns)?(Object.entries(DB.plmns).find(([p,n])=>n===r.carrier)?.[0]||''):''));
+
+ document.getElementById('fCarrier').value=r.carrier||'';
+ document.getElementById('fPlmn').value=plmn||'';
+ document.getElementById('fPlmn').dataset.auto='0';
+ document.getElementById('fRadio').value=r.radio||'LTE';
+ if(typeof updateIdLabel==='function')updateIdLabel();
+
+ document.getElementById('fId').value=r.eNB||r.gNB||'';
+ document.getElementById('fSite').value=r.site||'';
+ document.getElementById('fStatus').value=r.status||'confirmed';
+ document.getElementById('fBands').value=r.bands||'';
+ document.getElementById('fBandwidth').value=r.bandwidth||'';
+ document.getElementById('fCell').value=r.cell_id||'';
+ document.getElementById('fLocal').value=r.local_cell||'';
+ document.getElementById('fPci').value=r.pci||'';
+ document.getElementById('fTac').value=r.tac||'';
+
+ if(document.getElementById('fLat'))document.getElementById('fLat').value=r.latitude||'';
+ if(document.getElementById('fLon'))document.getElementById('fLon').value=r.longitude||'';
+ if(document.getElementById('fNotes'))document.getElementById('fNotes').value=r.notes||'';
+
+ document.getElementById('editKey').value=keyOf(base);
+ document.getElementById('formTitle').textContent='Edit Tower / Add Information';
+
+ const auto=document.getElementById('idAutofillStatus');
+ if(auto){
+   auto.textContent=`Editing ${r.site||'tower'} · ${r.carrier||''} ${r.radio||''} ${r.eNB?'eNB '+r.eNB:'gNB '+r.gNB}. Add or change any missing information, then use the normal save workflow.`;
+ }
+
+ const dup=document.getElementById('duplicateWarn');
+ if(dup)dup.innerHTML='';
+
+ window.scrollTo({top:0,behavior:'smooth'});
+}
+
 function universalRecordCard(r,matchText){
  const idLabel=r.radio==='LTE'?'eNB':'gNB';
  const idValue=r.eNB||r.gNB||'Unknown';
@@ -1108,6 +1179,7 @@ function universalRecordCard(r,matchText){
    </div>
    ${matchText?`<div style="margin-top:10px"><b>Match:</b> ${esc(matchText)}</div>`:''}
    ${r.notes?`<div class="small muted" style="margin-top:8px">${esc(r.notes)}</div>`:''}
+   <div class="row" style="margin-top:12px"><button type="button" onclick='openSearchResultInEdit(${JSON.stringify(keyOf(r))})'>Add/Edit Info</button></div>
  </div>`;
 }
 
@@ -1376,6 +1448,157 @@ function setCellMapperPanelFromScan(fields,registryMatch){
  setTimeout(()=>{
    document.getElementById('cmTowerId')?.scrollIntoView({behavior:'smooth',block:'center'});
  },180);
+}
+
+
+let cmBackgroundData=null;
+
+function normalizeCellMapperTower(raw){
+ const src = raw && (raw.raw || raw);
+ if(!src || typeof src!=='object')return {};
+
+ // CellMapper responses have changed over time, so look for common names without inventing values.
+ const get=(...names)=>{
+   for(const n of names){
+     if(src[n]!==undefined && src[n]!==null && src[n]!=='')return src[n];
+   }
+   return '';
+ };
+
+ return {
+   towerId:String(get('base','siteID','towerId','eNB','gNB')||''),
+   latitude:String(get('latitude','lat')||''),
+   longitude:String(get('longitude','lon','lng')||''),
+   tac:String(get('LAC','TAC','lac','tac')||''),
+   cells:get('cells','Cells','cellIds'),
+   sectors:get('sectors','Sectors'),
+   pci:String(get('PCI','pci','BSIC')||''),
+   system:String(get('system','RAT','rat')||''),
+   subtype:String(get('subSystem','RATSubType','subtype')||''),
+   arfcn:get('ARFCNS','ARFCN','EARFCN','NRARFCN'),
+   raw:src
+ };
+}
+
+async function runBackgroundCellMapperLookup(fieldsOverride){
+ const status=document.getElementById('cmBackgroundStatus');
+ const result=document.getElementById('cmBackgroundResult');
+
+ const plmn=(fieldsOverride?.plmn || document.getElementById('cmPlmn')?.value || '').replace(/\D/g,'');
+ const panelRadio=document.getElementById('cmRadio')?.value||'LTE';
+ const radio=fieldsOverride?.radio || (panelRadio==='NR'?'5G':'LTE');
+ const towerId=String(fieldsOverride?.sid || document.getElementById('cmTowerId')?.value || '').trim();
+ const tac=String(fieldsOverride?.tac || '').trim();
+
+ if(!plmn || !towerId){
+   if(status)status.textContent='Need PLMN and eNB/gNB.';
+   return;
+ }
+
+ if(status)status.textContent=`Looking up ${plmn} ${radio} ${towerId} in the background…`;
+ if(result)result.innerHTML='';
+
+ try{
+   const r=await fetch('/.netlify/functions/cellmapper-lookup',{
+     method:'POST',
+     headers:{'content-type':'application/json'},
+     body:JSON.stringify({plmn,radio,towerId,tac})
+   });
+   const data=await r.json();
+
+   if(!data.ok){
+     cmBackgroundData=null;
+     if(status)status.textContent=data.error||'No background result.';
+     if(result){
+       result.innerHTML=`<div class="notice">
+         <b>Background lookup did not return tower data.</b><br>
+         ${esc(data.error||'Unknown response')}
+         ${data.needTac?'<br>This LTE test needs TAC/LAC from the scan.':''}
+         ${data.unsupported?'<br>5G NR background lookup is not wired in this experiment yet.':''}
+       </div>`;
+     }
+     return;
+   }
+
+   cmBackgroundData=normalizeCellMapperTower(data.raw);
+   const t=cmBackgroundData;
+
+   if(status)status.textContent='Background CellMapper response received. Review before filling Add/Edit.';
+   if(result){
+     result.innerHTML=`<div class="card result ok">
+       <h3>CellMapper Background Result</h3>
+       <div class="kv">
+         <div class="label">Tower ID</div><div>${esc(t.towerId||towerId)}</div>
+         <div class="label">Latitude</div><div>${esc(t.latitude||'Not returned')}</div>
+         <div class="label">Longitude</div><div>${esc(t.longitude||'Not returned')}</div>
+         <div class="label">TAC/LAC</div><div>${esc(t.tac||tac||'Not returned')}</div>
+         <div class="label">Cells</div><div>${esc(typeof t.cells==='object'?JSON.stringify(t.cells):String(t.cells||'Not returned'))}</div>
+         <div class="label">Sectors</div><div>${esc(typeof t.sectors==='object'?JSON.stringify(t.sectors):String(t.sectors||'Not returned'))}</div>
+         <div class="label">PCI/BSIC</div><div>${esc(t.pci||'Not returned')}</div>
+         <div class="label">System</div><div>${esc(t.system||radio)}</div>
+         <div class="label">Subtype</div><div>${esc(t.subtype||'Not returned')}</div>
+       </div>
+       <div class="small muted" style="margin-top:8px">Experimental CellMapper source. Review before saving.</div>
+     </div>`;
+   }
+ }catch(e){
+   cmBackgroundData=null;
+   if(status)status.textContent='Background function could not be reached. This test must be deployed on Netlify, not GitHub Pages.';
+ }
+}
+
+function fillBackgroundCellMapperIntoForm(){
+ if(!cmBackgroundData){
+   const s=document.getElementById('cmBackgroundStatus');
+   if(s)s.textContent='Run a successful background lookup first.';
+   return;
+ }
+
+ const t=cmBackgroundData;
+ const plmn=(document.getElementById('cmPlmn')?.value||'').replace(/\D/g,'');
+ const carrier=carrierNameFromPlmn(plmn);
+ const radio=(document.getElementById('cmRadio')?.value==='NR')?'5G':'LTE';
+ const requestedId=(document.getElementById('cmTowerId')?.value||'').trim();
+ const towerId=t.towerId||requestedId;
+
+ showTab('add',document.querySelectorAll('.tab')[4]);
+ clearForm();
+
+ document.getElementById('fCarrier').value=carrier==='custom'?'':carrier;
+ document.getElementById('fPlmn').value=plmn;
+ document.getElementById('fPlmn').dataset.auto='0';
+ document.getElementById('fRadio').value=radio;
+ updateIdLabel();
+ document.getElementById('fId').value=towerId;
+ document.getElementById('fTac').value=t.tac||'';
+
+ if(document.getElementById('fLat'))document.getElementById('fLat').value=t.latitude||'';
+ if(document.getElementById('fLon'))document.getElementById('fLon').value=t.longitude||'';
+
+ const existing=DB.records.find(r =>
+   String(r.radio||'')===radio &&
+   String(r.eNB||r.gNB||'')===String(towerId) &&
+   (String(r.carrier||'')===carrier || String(r.plmn||'').replace(/\D/g,'')===plmn)
+ );
+
+ if(existing){
+   document.getElementById('editKey').value=keyOf(existing);
+   document.getElementById('fSite').value=existing.site||'';
+   document.getElementById('fBands').value=existing.bands||'';
+   document.getElementById('fBandwidth').value=existing.bandwidth||'';
+   document.getElementById('fCell').value=existing.cell_id||'';
+   document.getElementById('fLocal').value=existing.local_cell||'';
+   document.getElementById('fPci').value=existing.pci||t.pci||'';
+   document.getElementById('formTitle').textContent='CellMapper Background Result';
+ }else{
+   document.getElementById('editKey').value='';
+   document.getElementById('fSite').value='';
+   document.getElementById('fStatus').value='unknown';
+   document.getElementById('fPci').value=t.pci||'';
+   document.getElementById('formTitle').textContent='Add CellMapper Background Tower';
+ }
+
+ document.getElementById('fNotes').value='Source: CellMapper background experimental lookup. Review before saving.';
 }
 
 function syncCellMapperPlmn(){
@@ -2328,7 +2551,7 @@ function identifyFromScan(fields){
  // CELLMAPPER_EVERY_SCAN_TEST_v49
  // Testing mode sends EVERY successfully identified scan to the CellMapper Tower Search panel.
  if(fields && fields.plmn && fields.sid){
-   setTimeout(()=>setCellMapperPanelFromScan(fields,rec||null),260);
+   setTimeout(()=>{setCellMapperPanelFromScan(fields,rec||null);runBackgroundCellMapperLookup(fields);},260);
  }
 }
 

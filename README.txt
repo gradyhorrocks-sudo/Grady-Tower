@@ -393,3 +393,18 @@ CELLMAPPER EVERY-SCAN TEST v49:
   2. Unknown Towers Only (planned final mode)
   3. Off
 - Unknown tower Add/Edit flow remains available, but CellMapper is shown first during testing.
+
+BACKGROUND CELLMAPPER NETLIFY TEST v51:
+- This build is for Netlify, not plain GitHub Pages.
+- Every successful scan attempts a background lookup without leaving Tower Registry.
+- Frontend sends PLMN, radio, derived eNB/gNB, and TAC to /.netlify/functions/cellmapper-lookup.
+- The experimental backend tries an exact LTE base-station lookup when TAC/LAC is available.
+- Returned tower coordinates/details are previewed and can be transferred to Add/Edit.
+- 5G NR background lookup is intentionally reported unsupported in this first experiment instead of fabricating data.
+- CellMapper can rate-limit or change undocumented API behavior, so this remains a test.
+
+SEARCH RESULT ADD/EDIT (TEST):
+- Search Towers result cards now include Add/Edit Info.
+- Tapping it opens the exact registry record in Add/Edit with existing fields prefilled.
+- User can add missing Cell ID/NCI, PCI, TAC, bands, bandwidth, notes, map location, name, or other details.
+- Existing-record changes still follow the app's normal pending Save All Changes workflow where applicable.

@@ -343,7 +343,7 @@ Use 4G LTE for eNB searches and 5G NR for gNB searches.
 
 <div id="cmSearchPreview" style="margin-top:10px"></div>
 <div class="card" style="margin-top:12px">
-<h3>Background CellMapper Test</h3>
+<h3>Background CellMapper Diagnostic Test</h3>
 <div class="small muted">
 This test stays inside Tower Registry. After a scan it sends PLMN, LTE/5G, eNB/gNB and TAC to your separately hosted backend.
 If CellMapper returns usable tower data, the fields are previewed here and can be transferred into Add/Edit.
@@ -1505,6 +1505,111 @@ function setCellMapperPanelFromScan(fields,registryMatch){
 
 let cmBackgroundData=null;
 
+
+function cmDiagText(v,fallback='Not returned'){
+ if(v===undefined||v===null||v==='')return fallback;
+ if(Array.isArray(v))return v.length?JSON.stringify(v):'[]';
+ if(typeof v==='object')return JSON.stringify(v);
+ return String(v);
+}
+
+function cmDiagPretty(v){
+ try{return JSON.stringify(v,null,2);}
+ catch{return String(v??'');}
+}
+
+function cmShortUrl(v){
+ const s=String(v||'');
+ if(!s)return 'None';
+ try{
+   const u=new URL(s);
+   return u.hostname+u.pathname+(u.search?u.search.slice(0,160):'');
+ }catch{
+   return s.length>220?s.slice(0,220)+'…':s;
+ }
+}
+
+function renderCellMapperDiagnostics(data,towerId){
+ const raw=data?.raw||{};
+ const mapLat=data?.mapCenterLatitude??raw?.mapCenterLatitude??'';
+ const mapLon=data?.mapCenterLongitude??raw?.mapCenterLongitude??'';
+ const towerLat=data?.towerLatitude??raw?.latitude??'';
+ const towerLon=data?.towerLongitude??raw?.longitude??'';
+ const candidateFields=data?.candidateFields??raw?.candidateFields??[];
+ const candidatePreview=data?.candidatePreview??raw?.candidatePreview??null;
+ const matched=data?.matchedNetworkResponses||[];
+ const top=data?.topNetworkResponses||[];
+ const panelPreview=data?.panelTextPreview??raw?.panelTextPreview??'';
+
+ const sourceUrl=data?.networkSourceUrl||raw?.networkSourceUrl||'';
+ const sourceBlock=sourceUrl
+   ? `<div class="label">Network source</div><div style="overflow-wrap:anywhere">${esc(cmShortUrl(sourceUrl))}</div>`
+   : `<div class="label">Network source</div><div>None</div>`;
+
+ const candidateFieldText=Array.isArray(candidateFields)&&candidateFields.length
+   ? candidateFields.join(', ')
+   : 'None';
+
+ const matchedRows=matched.length
+   ? matched.map((m,i)=>`<div class="notice small" style="margin-top:6px">
+       <b>#${i+1} score ${esc(String(m.score??0))}</b><br>
+       ${esc(cmShortUrl(m.url||''))}<br>
+       Fields: ${esc((m.candidateFields||[]).join(', ')||'None')}
+     </div>`).join('')
+   : '<div class="small muted">No matching network response objects.</div>';
+
+ const topRows=top.length
+   ? top.slice(0,8).map((m,i)=>`<div class="small" style="margin-top:5px;overflow-wrap:anywhere">
+       ${i+1}. score ${esc(String(m.score??0))} · ${m.matched?'MATCH':'no match'} · ${esc(cmShortUrl(m.url||''))}
+     </div>`).join('')
+   : '<div class="small muted">No captured response summary available.</div>';
+
+ return `<div class="card" style="margin-top:12px;border-left:4px solid #7c9cff">
+   <h3>v9 CellMapper Diagnostics</h3>
+   <div class="small muted" style="margin-bottom:10px">
+     These values are diagnostic only. Map-center coordinates are intentionally separated from actual tower coordinates.
+   </div>
+
+   <div class="kv">
+     <div class="label">Requested Tower</div><div>${esc(String(towerId||data?.towerId||''))}</div>
+     <div class="label">Backend version</div><div>${esc(String(data?.version||'Unknown'))}</div>
+     <div class="label">Network matched</div><div>${data?.networkMatched?'YES ✓':'NO'}</div>
+     <div class="label">Network score</div><div>${esc(String(data?.networkScore??0))}</div>
+     ${sourceBlock}
+     <div class="label">Captured responses</div><div>${esc(String(data?.capturedNetworkResponses??0))}</div>
+
+     <div class="label">Tower latitude</div><div>${esc(cmDiagText(towerLat))}</div>
+     <div class="label">Tower longitude</div><div>${esc(cmDiagText(towerLon))}</div>
+     <div class="label">Map-center latitude</div><div>${esc(cmDiagText(mapLat))}</div>
+     <div class="label">Map-center longitude</div><div>${esc(cmDiagText(mapLon))}</div>
+
+     <div class="label">Panel found</div><div>${data?.panelFound?'YES ✓':'NO'}</div>
+     <div class="label">Panel score</div><div>${esc(String(data?.panelScore??0))}</div>
+     <div class="label">Candidate fields</div><div style="overflow-wrap:anywhere">${esc(candidateFieldText)}</div>
+   </div>
+
+   <details style="margin-top:12px">
+     <summary><b>Matching network responses (${matched.length})</b></summary>
+     ${matchedRows}
+   </details>
+
+   <details style="margin-top:10px">
+     <summary><b>Top captured responses</b></summary>
+     ${topRows}
+   </details>
+
+   <details style="margin-top:10px">
+     <summary><b>Candidate JSON preview</b></summary>
+     <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto">${esc(candidatePreview?cmDiagPretty(candidatePreview):'No candidate object')}</pre>
+   </details>
+
+   <details style="margin-top:10px">
+     <summary><b>Selected panel preview</b></summary>
+     <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto">${esc(panelPreview||'No clean selected-tower panel text')}</pre>
+   </details>
+ </div>`;
+}
+
 function normalizeCellMapperTower(raw){
  const src = raw && (raw.raw || raw);
  if(!src || typeof src!=='object')return {};
@@ -1528,6 +1633,11 @@ function normalizeCellMapperTower(raw){
    system:String(get('system','RAT','rat')||''),
    subtype:String(get('subSystem','RATSubType','subtype')||''),
    arfcn:get('ARFCNS','ARFCN','EARFCN','NRARFCN'),
+   verification:String(get('verification','verified','subSystem')||''),
+   mapCenterLatitude:String(src.mapCenterLatitude||''),
+   mapCenterLongitude:String(src.mapCenterLongitude||''),
+   networkScore:Number(src.networkScore||0),
+   networkSourceUrl:String(src.networkSourceUrl||''),
    raw:src
  };
 }
@@ -1600,51 +1710,54 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
      if(status)status.textContent='No background backend configured. Open Backup and save the backend URL first.';
      return;
    }
+
    const r=await fetch(backend+'/.netlify/functions/cellmapper-lookup',{
      method:'POST',
      headers:{'content-type':'application/json'},
      body:JSON.stringify({plmn,radio,towerId,tac})
    });
+
    const data=await r.json();
 
-   if(!data.ok){
+   // Keep data available for diagnostics even when backend intentionally returns ok:false.
+   const normalized=normalizeCellMapperTower(data.raw||data);
+   const t=normalized;
+
+   if(data.ok){
+     cmBackgroundData=normalized;
+     if(status)status.textContent='Background CellMapper response received. Review diagnostics before filling Add/Edit.';
+   }else{
      cmBackgroundData=null;
-     if(status)status.textContent=data.error||'No background result.';
-     if(result){
-       result.innerHTML=`<div class="notice">
-         <b>Background lookup did not return tower data.</b><br>
-         ${esc(data.error||'Unknown response')}
-         ${data.needTac?'<br>This LTE test needs TAC/LAC from the scan.':''}
-         ${data.unsupported?'<br>5G NR background lookup is not wired in this experiment yet.':''}
-       </div>`;
-     }
-     return;
+     if(status)status.textContent=data.error||'Diagnostic run completed without clean tower data.';
    }
 
-   cmBackgroundData=normalizeCellMapperTower(data.raw);
-   const t=cmBackgroundData;
-
-   if(status)status.textContent='Background CellMapper response received. Review before filling Add/Edit.';
    if(result){
-     result.innerHTML=`<div class="card result ok">
+     const mainClass=data.ok?'card result ok':'notice';
+     result.innerHTML=`<div class="${mainClass}">
        <h3>CellMapper Background Result</h3>
        <div class="kv">
          <div class="label">Tower ID</div><div>${esc(t.towerId||towerId)}</div>
-         <div class="label">Latitude</div><div>${esc(t.latitude||'Not returned')}</div>
-         <div class="label">Longitude</div><div>${esc(t.longitude||'Not returned')}</div>
+         <div class="label">Tower Latitude</div><div>${esc(data.towerLatitude||t.latitude||'Not returned')}</div>
+         <div class="label">Tower Longitude</div><div>${esc(data.towerLongitude||t.longitude||'Not returned')}</div>
          <div class="label">TAC/LAC</div><div>${esc(t.tac||tac||'Not returned')}</div>
          <div class="label">Cells</div><div>${esc(typeof t.cells==='object'?JSON.stringify(t.cells):String(t.cells||'Not returned'))}</div>
          <div class="label">Sectors</div><div>${esc(typeof t.sectors==='object'?JSON.stringify(t.sectors):String(t.sectors||'Not returned'))}</div>
          <div class="label">PCI/BSIC</div><div>${esc(t.pci||'Not returned')}</div>
          <div class="label">System</div><div>${esc(t.system||radio)}</div>
-         <div class="label">Subtype</div><div>${esc(t.subtype||'Not returned')}</div>
+         <div class="label">Verified state</div><div>${esc(t.verification||t.subtype||'Unknown')}</div>
        </div>
-       <div class="small muted" style="margin-top:8px">Experimental CellMapper source. Review before saving.</div>
-     </div>`;
+       ${data.ok
+         ? '<div class="small muted" style="margin-top:8px">Experimental CellMapper source. Review diagnostics before saving.</div>'
+         : `<div class="small" style="margin-top:8px"><b>Diagnostic result:</b> ${esc(data.error||'No clean tower-specific data extracted.')}</div>`}
+     </div>
+     ${renderCellMapperDiagnostics(data,towerId)}`;
    }
  }catch(e){
    cmBackgroundData=null;
    if(status)status.textContent='Background backend could not be reached. Open Backup and verify the separate backend URL.';
+   if(result){
+     result.innerHTML=`<div class="notice"><b>Backend request failed.</b><br>${esc(String(e&&e.message||e))}</div>`;
+   }
  }
 }
 

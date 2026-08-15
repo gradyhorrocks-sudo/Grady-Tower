@@ -426,3 +426,23 @@ REMOTE BACKEND TEST v55:
 - Background CellMapper lookup calls a separately hosted backend URL.
 - Configure under Backup > Background Lookup Backend.
 - Test Backend verifies the remote health endpoint.
+
+
+CELLMAPPER DIAGNOSTIC FRONTEND TEST v56:
+- TEST frontend only. Official v50 is unchanged.
+- Displays v9 backend diagnostics directly in Tower Registry.
+- Shows:
+  network matched yes/no
+  network score
+  network source URL
+  captured response count
+  actual tower latitude/longitude
+  map-center latitude/longitude separately
+  selected panel found/score
+  candidate fields
+  matching network responses
+  top captured responses
+  candidate JSON preview
+  selected panel preview
+- Diagnostic information is shown even when backend returns ok:false.
+- Existing Add/Edit flow remains available only after a successful clean result.

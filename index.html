@@ -1,7 +1,9 @@
 <!doctype html>
 <html>
 <head>
-<!-- Frontend v71: conditional first-time CellMapper workflow diagnostics -->
+<!-- Master Cellular Tower Registry frontend v74: current-state verification filter + live Search Towers refresh -->
+
+<!-- Frontend v72: direct-URL recorded-click workflow diagnostics -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111827">
@@ -296,10 +298,11 @@ main, .container, .content{
 <label>Verification</label>
 <select id="searchVerification" onchange="universalLookup()">
 <option value="">All towers</option>
-<option value="unverified">Unverified / Provisional / Unknown</option>
+<option value="unverified">Unverified / Provisional / Unknown status</option>
 <option value="unnamed">Unnamed only</option>
 <option value="verified">Verified only</option>
 </select>
+<div class="small muted">Uses the tower’s current status, including pending Add/Edit changes. Naming is handled separately by “Unnamed only.”</div>
 </div>
 <div>
 <label>Radio filter</label>
@@ -1195,6 +1198,7 @@ function saveAllPendingChanges(){
     if(typeof cmBackgroundData!=='undefined')cmBackgroundData=null;
 
     renderRegistry();
+ refreshUniversalLookupIfPresent();
     if(towerMap)renderTowerMap();
 
     showSaveAllSuccess(`✓ ${saved} change${saved===1?'':'s'} saved successfully.`);
@@ -1219,7 +1223,8 @@ function discardAllPendingChanges(){
 }
 
 fetch('registry.json').then(r=>r.json()).then(j=>{
- BUILTIN=j; DB=loadLocal()||JSON.parse(JSON.stringify(j)); renderRegistry(); refreshCarrierList(); syncPlmn();
+ BUILTIN=j; DB=loadLocal()||JSON.parse(JSON.stringify(j)); renderRegistry();
+ refreshUniversalLookupIfPresent(); refreshCarrierList(); syncPlmn();
 }).catch(()=>{document.getElementById('out').innerHTML='<div class="card unknown">Could not load registry.json.</div>'});
 
 function signalRating(kind,v){
@@ -1368,8 +1373,27 @@ function isUnnamedTower(r){
 }
 
 function isUnverifiedTower(r){
+ // v73: Verification and naming are separate concepts.
+ // "Unnamed only" already has its own filter, so a confirmed tower must not be
+ // forced back into Unverified merely because its site name is unknown or ends in ?.
  const status=String(r.status||'').trim().toLowerCase();
- return status!=='confirmed' || isUnnamedTower(r);
+ return status!=='confirmed';
+}
+
+function effectiveSearchRecords(){
+ if(!DB || !Array.isArray(DB.records))return [];
+ return DB.records
+   .map(r=>(typeof getEffectiveRecord==='function') ? getEffectiveRecord(r) : r)
+   .filter(r=>r && !r.__delete);
+}
+
+// v74: Search Towers results are a live view of the CURRENT registry state.
+// Any Add/Edit or pending-change action must immediately re-run the active filter.
+function refreshUniversalLookupIfPresent(){
+ const out=document.getElementById('universalLookupOut');
+ const verification=document.getElementById('searchVerification');
+ if(!out || !verification || typeof universalLookup!=='function')return;
+ try{ universalLookup(); }catch(e){ console.warn('Search Towers refresh failed',e); }
 }
 
 function universalLookup(){
@@ -1404,8 +1428,11 @@ function universalLookup(){
  }
 
  // Text fields, including direct saved IDs.
- for(const r of DB.records){
-   if(!allowed(r))continue;
+ // v73: use the effective preview record so Add/Edit changes are reflected here
+ // immediately, even before "Save All Changes" commits them to DB.records.
+ for(const baseRecord of DB.records){
+   const r=(typeof getEffectiveRecord==='function') ? getEffectiveRecord(baseRecord) : baseRecord;
+   if(!r || r.__delete || !allowed(r))continue;
 
    const keywordUnverified=['unverified','unverified tower','unknown','unknown tower','provisional'].includes(q);
    const keywordUnnamed=['unnamed','unnamed tower','no name','unmapped'].includes(q);
@@ -1468,21 +1495,21 @@ function universalLookup(){
    const n=BigInt(raw);
 
    // Direct LTE eNB.
-   DB.records.filter(r=>r.radio==='LTE' && String(r.eNB||'')===raw)
+   effectiveSearchRecords().filter(r=>r.radio==='LTE' && String(r.eNB||'')===raw)
      .forEach(r=>add(r,`Direct LTE eNB ${raw} match ✅`));
 
    // Direct 5G gNB.
-   DB.records.filter(r=>r.radio==='5G' && String(r.gNB||'')===raw)
+   effectiveSearchRecords().filter(r=>r.radio==='5G' && String(r.gNB||'')===raw)
      .forEach(r=>add(r,`Direct 5G gNB ${raw} match ✅`));
 
    // Exact stored Cell ID/NCI.
-   DB.records.filter(r=>String(r.cell_id||'')===raw)
+   effectiveSearchRecords().filter(r=>String(r.cell_id||'')===raw)
      .forEach(r=>add(r,`Exact saved Cell ID/NCI ${raw} match ✅`));
 
    // LTE Cell ID -> eNB + sector.
    const enb=(n/256n).toString();
    const sector=(n%256n).toString();
-   DB.records.filter(r=>r.radio==='LTE' && String(r.eNB||'')===enb)
+   effectiveSearchRecords().filter(r=>r.radio==='LTE' && String(r.eNB||'')===enb)
      .forEach(r=>add(r,
        `LTE Cell ID math: ${raw} // 256 = eNB ${enb}, sector ${sector}. Reverse: ${enb} × 256 + ${sector} = ${(BigInt(enb)*256n+BigInt(sector)).toString()} ✅`
      ));
@@ -1490,7 +1517,7 @@ function universalLookup(){
    // 5G NCI -> gNB + local cell using current 12-bit interpretation.
    const gnb=(n/4096n).toString();
    const local=(n%4096n).toString();
-   DB.records.filter(r=>r.radio==='5G' && String(r.gNB||'')===gnb)
+   effectiveSearchRecords().filter(r=>r.radio==='5G' && String(r.gNB||'')===gnb)
      .forEach(r=>add(r,
        `5G NCI /4096 ?: ${raw} // 4096 = gNB ${gnb} ?, local ${local} ?. Reverse: ${gnb} × 4096 + ${local} = ${(BigInt(gnb)*4096n+BigInt(local)).toString()} ✅`
      ));
@@ -2141,8 +2168,10 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
          <div class="label">System</div><div>${esc(t.system||radio)}</div>
          <div class="label">Backend version</div><div>${esc(data.version||'Not returned')}</div>
          <div class="label">Last human workflow step</div><div>${esc((data.humanUiTrace||[]).slice(-1)[0]?.step||'Not returned')}</div>
-         <div class="label">Workflow mode</div><div>Conditional: absent popups/ads are skipped</div>
+         <div class="label">Workflow mode</div><div>Direct URL: follows recorded black-circle click path</div>
          <div class="label">Backend source</div><div>${esc(data.source||data.backendSource||'Not returned')}</div>
+         <div class="label">Workflow mode</div><div>${esc(data.workflowMode||'Not returned')}</div>
+         <div class="label">Workflow start URL</div><div style="word-break:break-all">${esc(data.workflowStartUrl||'Not returned')}</div>
          <div class="label">Workflow video</div>
          <div>${data.videoInfo?.base64
            ? `<button class="btn secondary" onclick="downloadLastCellMapperVideo()">Download Video</button>`
@@ -2501,7 +2530,9 @@ function saveRecord(){
  if(carrier==='STRATA Networks'&&id==='1079'&&site!=='UNMAPPED STRATA SITE ?'&&rec.status==='confirmed'){
    // User is explicitly naming 1079 in-app, so allow it.
  }
- renderRegistry();refreshCarrierList();if(towerMap)renderTowerMap();if(isNewRecord)clearForm();
+ renderRegistry();refreshCarrierList();if(towerMap)renderTowerMap();
+ refreshUniversalLookupIfPresent();
+ if(isNewRecord)clearForm();
 }
 function editRecord(k){
  let r=DB.records.find(x=>keyOf(x)===k);if(!r)return;r=getEffectiveRecord(r);
@@ -2517,6 +2548,7 @@ function deleteRecord(k){
  if(!confirm(`Mark ${r.site} (${r.eNB||r.gNB}) for deletion? It will not be removed until Save All Changes.`))return;
  stageExistingTowerChange(r,{__delete:true},'Delete tower');
  toast('Deletion added to pending changes.');
+ refreshUniversalLookupIfPresent();
 }
 function exportRegistry(){
  const blob=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='Master_Cellular_Tower_Registry_Backup.json';a.click();URL.revokeObjectURL(a.href);toast('Registry exported.');

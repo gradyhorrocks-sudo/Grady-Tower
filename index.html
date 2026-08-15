@@ -1954,29 +1954,56 @@ function autoFillVerifiedCellMapperTower(data, normalized, requested){
 
 
 function cellMapperFinalStatus(data){
+  // v67: trust the backend's final text-based CellMapper classification.
+  // Marker color is retained only as a compatibility fallback for older backends.
   const backendStatus=String(data?.cellMapperStatus||'').trim().toLowerCase();
+  const verification=String(
+    data?.finalVerification ||
+    data?.verification ||
+    data?.raw?.verification ||
+    ''
+  ).trim().toLowerCase();
+
   const color=String(
+    data?.finalMarkerColor ||
     data?.cellMapperMarkerColor ||
     data?.markerColor ||
-    data?.verificationColorResult?.markerColor ||
     data?.raw?.markerColor ||
     ''
-  ).toLowerCase();
+  ).trim().toLowerCase();
 
-  if(backendStatus==='not in cellmapper' || data?.humanTowerExists===false){
+  if(
+    backendStatus==='not in cellmapper' ||
+    verification==='not_in_cellmapper' ||
+    data?.humanTowerExists===false
+  ){
     return {key:'not-in-cellmapper',label:'Not in CellMapper',verified:false,markerColor:''};
   }
 
-  if(backendStatus==='verified' || color==='green' || data?.verification==='verified'){
+  if(
+    backendStatus==='verified' ||
+    verification==='verified' ||
+    color==='green'
+  ){
     return {key:'verified',label:'Verified',verified:true,markerColor:'green'};
   }
 
-  if(backendStatus==='unverified' || color==='red' || data?.verification==='unverified'){
+  if(
+    backendStatus==='unverified' ||
+    verification==='unverified' ||
+    color==='red'
+  ){
     return {key:'unverified',label:'Unverified',verified:false,markerColor:'red'};
   }
 
-  // This is a lookup failure, NOT a fourth CellMapper tower state.
-  return {key:'lookup-error',label:'Could not read CellMapper tower color',verified:false,markerColor:''};
+  return {
+    key:'lookup-error',
+    label:backendStatus==='could not read extra data'
+      ? 'Could not read Extra Data'
+      : 'Could not read Extra Data',
+    verified:false,
+    markerColor:''
+  };
 }
 
 
@@ -2046,7 +2073,7 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
      if(status)status.textContent='Not in CellMapper';
    }else{
      cmBackgroundData=null;
-     if(status)status.textContent='CellMapper found the tower, but the visible marker color could not be read. Lookup was not saved as red or green.';
+     if(status)status.textContent='CellMapper found the tower, but Extra Data could not be read. Lookup was not saved as verified or unverified.';
    }
 
    if(result){
@@ -2072,6 +2099,8 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
          <div class="label">Tower Latitude</div><div>${esc(latOut)}</div>
          <div class="label">Tower Longitude</div><div>${esc(lonOut)}</div>
          <div class="label">System</div><div>${esc(t.system||radio)}</div>
+         <div class="label">Backend version</div><div>${esc(data.version||'Not returned')}</div>
+         <div class="label">Backend source</div><div>${esc(data.source||'Not returned')}</div>
        </div>
      </div>`;
    }

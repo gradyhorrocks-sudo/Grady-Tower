@@ -475,14 +475,3 @@ TEST FRONTEND v58:
   decoded getTowers data
   exact site decoded data
 - Cache key bumped again so Safari/GitHub Pages loads this build.
-
-
-TEST FRONTEND v59 DIAGNOSTIC EXPORT:
-- TEST only. Official v50 unchanged.
-- Keeps all v58/v13 getTowers tracing and diagnostics.
-- Adds a compact tower summary above the detailed diagnostic output.
-- Adds Copy Full Diagnostic to copy the complete request + complete backend JSON response.
-- Adds Download Diagnostic JSON with filename PLMN/radio/tower ID.
-- Raw/large diagnostic sections remain collapsed by default.
-- Does not change registry records, Add/Edit behavior, or the separately hosted backend.
-- Cache/build key bumped for Safari/GitHub Pages refresh.

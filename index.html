@@ -1506,7 +1506,31 @@ function setCellMapperPanelFromScan(fields,registryMatch){
 
 
 let cmBackgroundData=null;
-let cmFullDiagnostic=null;
+let cmFullDiagnosticData=null;
+
+function cmDiagnosticPayload(){
+ return cmFullDiagnosticData || {};
+}
+function cmDiagnosticFilename(){
+ const d=cmDiagnosticPayload();
+ const plmn=String(document.getElementById('cmPlmn')?.value||d.plmn||'unknown').replace(/[^0-9A-Za-z_-]/g,'');
+ const radio=String(document.getElementById('cmRadio')?.value||d.radio||'unknown').replace(/[^0-9A-Za-z_-]/g,'');
+ const tower=String(document.getElementById('cmTowerId')?.value||d.towerId||d.exactSiteID||'unknown').replace(/[^0-9A-Za-z_-]/g,'');
+ return `CellMapper_${plmn}_${radio}_${tower}_diagnostic.json`;
+}
+async function copyCellMapperDiagnostic(){
+ const text=JSON.stringify(cmDiagnosticPayload(),null,2);
+ try{ await navigator.clipboard.writeText(text); alert('Full CellMapper diagnostic copied.'); }
+ catch(e){ prompt('Copy the full diagnostic below:',text); }
+}
+function downloadCellMapperDiagnostic(){
+ const text=JSON.stringify(cmDiagnosticPayload(),null,2);
+ const blob=new Blob([text],{type:'application/json'});
+ const a=document.createElement('a');
+ a.href=URL.createObjectURL(blob); a.download=cmDiagnosticFilename();
+ document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
 
 
 function cmDiagText(v,fallback='Not returned'){
@@ -1519,50 +1543,6 @@ function cmDiagText(v,fallback='Not returned'){
 function cmDiagPretty(v){
  try{return JSON.stringify(v,null,2);}
  catch{return String(v??'');}
-}
-
-function cmDiagnosticFileName(diag){
- const req=diag?.request||{};
- const plmn=String(req.plmn||'unknown').replace(/[^0-9A-Za-z_-]/g,'');
- const radio=String(req.radio||'unknown').replace(/[^0-9A-Za-z_-]/g,'');
- const tower=String(req.towerId||'unknown').replace(/[^0-9A-Za-z_-]/g,'');
- return `CellMapper_${plmn}_${radio}_${tower}_diagnostic.json`;
-}
-
-function cmDiagnosticExportText(){
- return cmDiagPretty(cmFullDiagnostic||{error:'No diagnostic has been run yet.'});
-}
-
-async function copyFullCellMapperDiagnostic(){
- if(!cmFullDiagnostic){toast('Run a background lookup first.');return;}
- const text=cmDiagnosticExportText();
- try{
-   await navigator.clipboard.writeText(text);
-   toast('Full CellMapper diagnostic copied ✓');
- }catch(e){
-   const ta=document.createElement('textarea');
-   ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);
-   ta.focus();ta.select();
-   const ok=document.execCommand('copy');
-   ta.remove();
-   toast(ok?'Full CellMapper diagnostic copied ✓':'Could not copy diagnostic. Use Download Diagnostic JSON.');
- }
-}
-
-function downloadFullCellMapperDiagnostic(){
- if(!cmFullDiagnostic){toast('Run a background lookup first.');return;}
- const blob=new Blob([cmDiagnosticExportText()],{type:'application/json;charset=utf-8'});
- const url=URL.createObjectURL(blob);
- const a=document.createElement('a');
- a.href=url;a.download=cmDiagnosticFileName(cmFullDiagnostic);document.body.appendChild(a);a.click();a.remove();
- setTimeout(()=>URL.revokeObjectURL(url),1000);
- toast('Diagnostic JSON created ✓');
-}
-
-function cmCompactArray(v){
- if(!Array.isArray(v)||!v.length)return 'Not returned';
- const vals=[...new Set(v.filter(x=>x!==null&&x!==undefined&&x!=='').map(String))];
- return vals.length?vals.join(', '):'Not returned';
 }
 
 function cmShortUrl(v){
@@ -1624,21 +1604,23 @@ function renderCellMapperDiagnostics(data,towerId){
    : '<div class="small muted">No captured response summary available.</div>';
 
  return `<div class="card" style="margin-top:12px;border-left:4px solid #7c9cff">
-   <h3>v13 CellMapper Diagnostics</h3>
+   <h3>v59 CellMapper Diagnostics</h3>
+   <div class="card" style="margin:10px 0">
+    <h3 style="margin-top:0">Compact Tower Summary</h3>
+    <div class="kv">
+     <div class="label">Tower</div><div>${esc(String(towerId||data?.towerId||''))}</div>
+     <div class="label">Exact match</div><div>${data?.exactSiteMatched?'YES ✓':'NO'}</div>
+     <div class="label">getTowers</div><div>${data?.getTowersMatched?'YES ✓':'NO'}</div>
+     <div class="label">Bands</div><div>${esc(cmDiagText(data?.getTowersBandNumbersPreview,'Not returned'))}</div>
+     <div class="label">Channels</div><div>${esc(cmDiagText(data?.getTowersChannelsPreview,'Not returned'))}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+     <button type="button" onclick="copyCellMapperDiagnostic()">Copy Full Diagnostic</button>
+     <button type="button" onclick="downloadCellMapperDiagnostic()">Download Diagnostic JSON</button>
+    </div>
+   </div>
    <div class="small muted" style="margin-bottom:10px">
      Test diagnostics only. getSite coordinates remain separate from map-center coordinates. getTowers is traced independently.
-   </div>
-
-   <div class="goodnote" style="margin-bottom:10px">
-     <b>Compact tower summary</b><br>
-     Tower ${esc(String(towerId||data?.towerId||''))} · Exact match ${data?.exactSiteMatched?'✓':'NO'} · getTowers ${data?.getTowersMatched?'✓':'NO'}<br>
-     Bands: ${esc(cmCompactArray(data?.getTowersBandNumbersPreview))}<br>
-     Channels: ${esc(cmCompactArray(data?.getTowersChannelsPreview))}<br>
-     Cells: ${esc(Array.isArray(data?.getTowersCellsPreview)?String(data.getTowersCellsPreview.length):'Not returned')} · Bandwidth: ${esc(cmCompactArray(data?.getTowersBandwidthsPreview))}
-   </div>
-   <div class="row" style="margin-bottom:12px">
-     <button type="button" onclick="copyFullCellMapperDiagnostic()">Copy Full Diagnostic</button>
-     <button type="button" class="secondary" onclick="downloadFullCellMapperDiagnostic()">Download Diagnostic JSON</button>
    </div>
 
    <div class="kv">
@@ -1761,6 +1743,7 @@ async function testRemoteBackend(){
  try{
    const r=await fetch(base+'/.netlify/functions/health',{cache:'no-store'});
    const data=await r.json();
+   cmFullDiagnosticData=data;
    if(r.ok&&data.ok){if(status)status.textContent='Backend connected ✓';}
    else{if(status)status.textContent='Backend responded, but health check failed.';}
  }catch(e){
@@ -1804,16 +1787,7 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
    });
 
    const data=await r.json();
-
-   // Preserve the complete backend payload for one-tap copy/download.
-   // This is diagnostic-only and does not modify registry records.
-   cmFullDiagnostic={
-     exportVersion:'v59-cellmapper-diagnostic-export',
-     generatedAt:new Date().toISOString(),
-     request:{plmn,radio,towerId,tac},
-     http:{ok:r.ok,status:r.status},
-     response:data
-   };
+   cmFullDiagnosticData=data;
 
    // Keep data available for diagnostics even when backend intentionally returns ok:false.
    const normalized=normalizeCellMapperTower(data.raw||data);

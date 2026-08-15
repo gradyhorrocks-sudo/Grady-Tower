@@ -341,7 +341,7 @@ Use 4G LTE for eNB searches and 5G NR for gNB searches.
 <option value="unknown" selected>Only for towers not already in Registry</option>
 <option value="off">Off</option>
 </select>
-<div class="small muted">Unknown towers are checked automatically. Existing registry towers are left alone.</div>
+<div class="small muted">Towers not already in the Registry are checked automatically. Existing registry towers are left alone.</div>
 </div>
 
 
@@ -395,7 +395,7 @@ Tower Registry can check CellMapper in the background using the selected carrier
 </div>
 
 <div class="notice small" style="margin-top:8px">
-  <b>Verified autofill:</b> A green CellMapper tower is treated as verified and automatically fills the eNB/gNB plus tower coordinates into Add/Edit for the selected carrier. Red or unknown towers do not auto-fill.
+  <b>CellMapper status:</b> Green = Verified, red = Unverified, and no matching tower = Not in CellMapper.
 </div>
 
 <div id="cmBackgroundStatus" class="small muted" style="margin-top:8px"></div>
@@ -1135,80 +1135,57 @@ function showSaveAllSuccess(message){
   try{toast('Everything saved ✓');}catch(e){}
 }
 
-function saveAllPendingChanges(){
-  const pendingCount=Array.isArray(window.pendingChanges) ? window.pendingChanges.length :
-                     (typeof pendingChanges!=='undefined' && Array.isArray(pendingChanges) ? pendingChanges.length : 0);
 
-  if(pendingCount===0){
+function saveAllPendingChanges(){
+  const entries=Object.values(pendingTowerChanges||{});
+  const pendingCount=entries.length;
+
+  if(!pendingCount){
+    refreshPendingChangesUI();
     showSaveAllSuccess('Everything is already saved.');
     return;
   }
 
   try{
-    // Preserve the app's existing pending-change commit behavior.
-    const list = Array.isArray(window.pendingChanges)
-      ? window.pendingChanges
-      : (typeof pendingChanges!=='undefined' && Array.isArray(pendingChanges) ? pendingChanges : []);
+    let saved=0;
 
-    for(const change of list){
-      if(!change)continue;
+    for(const item of entries){
+      if(!item)continue;
+      const key=String(item.key||'');
+      const original=item.original||{};
+      const changes=item.changes||{};
 
-      // Common pending-change shapes supported by previous builds.
-      const key=change.key||change.editKey||change.id||'';
-      const record=change.record||change.updated||change.data||change;
-
-      if(key){
-        const idx=(DB.records||[]).findIndex(r =>
-          String(r._key||r.key||r.id||'')===String(key) ||
-          String(r.eNB||r.gNB||'')===String(record.eNB||record.gNB||'')
+      let idx=(DB.records||[]).findIndex(r=>pendingKey(r)===key);
+      if(idx<0){
+        idx=(DB.records||[]).findIndex(r=>
+          String(r.carrier||'')===String(original.carrier||'') &&
+          String(r.radio||'')===String(original.radio||'') &&
+          String(r.eNB||r.gNB||'')===String(original.eNB||original.gNB||'')
         );
-        if(idx>=0){
-          DB.records[idx]={...DB.records[idx],...record};
-          continue;
-        }
       }
 
-      // If no matching record exists, only add when it has a valid carrier + tower ID.
-      const towerId=String(record.eNB||record.gNB||'').trim();
-      if(towerId && record.carrier){
-        const duplicate=(DB.records||[]).some(r =>
-          String(r.carrier||'')===String(record.carrier||'') &&
-          String(r.radio||'')===String(record.radio||'') &&
-          String(r.eNB||r.gNB||'')===towerId
-        );
-        if(!duplicate)DB.records.push(record);
+      if(idx>=0){
+        DB.records[idx]={...DB.records[idx],...changes};
+        saved++;
       }
     }
 
     saveLocal();
 
-    // Clear every known pending-change container.
-    if(Array.isArray(window.pendingChanges))window.pendingChanges.length=0;
-    if(typeof pendingChanges!=='undefined' && Array.isArray(pendingChanges))pendingChanges.length=0;
-
-    if(window.pendingEdits && typeof window.pendingEdits==='object'){
-      if(Array.isArray(window.pendingEdits))window.pendingEdits.length=0;
-      else Object.keys(window.pendingEdits).forEach(k=>delete window.pendingEdits[k]);
-    }
-
-    // Clear stale edit/scan forms and pending banners.
-    const pendingBar=document.getElementById('pendingChangesBar');
-    const pendingCountEl=document.getElementById('pendingChangesCount');
-    if(pendingBar)pendingBar.classList.add('hidden');
-    if(pendingCountEl)pendingCountEl.textContent='0';
-
-    const unknownBanner=document.getElementById('unknownScanBanner');
-    const unknownActions=document.getElementById('unknownScanActions');
-    if(unknownBanner){unknownBanner.classList.add('hidden');unknownBanner.innerHTML='';}
-    if(unknownActions){unknownActions.classList.add('hidden');unknownActions.innerHTML='';}
+    pendingTowerChanges={};
+    refreshPendingChangesUI();
 
     window._currentUnknownScanFields=null;
     window._unknownScanFormSignature=null;
 
+    const banner=document.getElementById('unknownScanBanner');
+    const actions=document.getElementById('unknownScanActions');
+    if(banner){banner.classList.add('hidden');banner.innerHTML='';}
+    if(actions){actions.classList.add('hidden');actions.innerHTML='';}
+
     try{clearForm();}catch(e){}
     try{clearScanPage();}catch(e){}
 
-    // Clear background CellMapper preview/status after a successful save-all.
     const cmStatus=document.getElementById('cmBackgroundStatus');
     const cmResult=document.getElementById('cmBackgroundResult');
     if(cmStatus)cmStatus.textContent='';
@@ -1216,11 +1193,14 @@ function saveAllPendingChanges(){
     if(typeof cmBackgroundData!=='undefined')cmBackgroundData=null;
 
     renderRegistry();
-    showSaveAllSuccess(`✓ ${pendingCount} change${pendingCount===1?'':'s'} saved successfully.`);
+    if(towerMap)renderTowerMap();
+
+    showSaveAllSuccess(`✓ ${saved} change${saved===1?'':'s'} saved successfully.`);
   }catch(e){
     alert('Could not save all changes: '+String(e&&e.message||e));
   }
 }
+
 
 
 function discardAllPendingChanges(){
@@ -1970,6 +1950,39 @@ function autoFillVerifiedCellMapperTower(data, normalized, requested){
 }
 
 
+
+function cellMapperFinalStatus(data){
+  const exists=Boolean(
+    data?.exactSiteMatched===true ||
+    data?.getSiteMatched===true ||
+    data?.getTowersMatched===true
+  );
+
+  if(!exists){
+    return {key:'not-in-cellmapper',label:'Not in CellMapper',verified:false,markerColor:''};
+  }
+
+  const color=String(
+    data?.cellMapperMarkerColor ||
+    data?.markerColor ||
+    data?.verificationColorResult?.markerColor ||
+    data?.raw?.markerColor ||
+    ''
+  ).toLowerCase();
+
+  const verification=String(
+    data?.verification ||
+    data?.raw?.verification ||
+    ''
+  ).toLowerCase();
+
+  if(color==='green' || verification==='verified' || data?.verified===true || data?.cellMapperVerified===true){
+    return {key:'verified',label:'Verified',verified:true,markerColor:'green'};
+  }
+
+  return {key:'unverified',label:'Unverified',verified:false,markerColor:'red'};
+}
+
 async function runBackgroundCellMapperLookup(fieldsOverride){
  const status=document.getElementById('cmBackgroundStatus');
  const result=document.getElementById('cmBackgroundResult');
@@ -2008,45 +2021,59 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
    const normalized=normalizeCellMapperTower(data.raw||data);
    const t=normalized;
 
-   if(data.ok){
+   const cmState=cellMapperFinalStatus(data);
+
+   if(cmState.key==='verified'){
+     normalized.verification='verified';
+     normalized.markerColor='green';
      cmBackgroundData=normalized;
 
      const verifiedAutofill=autoFillVerifiedCellMapperTower(
-       data,
+       {...data,verification:'verified',markerColor:'green',verified:true,cellMapperVerified:true},
        normalized,
        {plmn,radio,towerId,tac}
      );
 
      if(status){
        status.textContent=verifiedAutofill.filled
-         ? `CellMapper GREEN / VERIFIED ✓ — automatically filled tower ${verifiedAutofill.towerId} and coordinates into Add/Edit. Review, then save to the selected carrier list.`
-         : 'Background CellMapper response received. Tower was not confirmed green/verified, so coordinates were not auto-filled.';
+         ? `CellMapper GREEN / VERIFIED ✓ — tower ${verifiedAutofill.towerId} and coordinates were filled into Add/Edit.`
+         : 'CellMapper GREEN / VERIFIED ✓';
      }
+   }else if(cmState.key==='unverified'){
+     normalized.verification='unverified';
+     normalized.markerColor='red';
+     cmBackgroundData=normalized;
+     if(status)status.textContent='CellMapper RED / UNVERIFIED — tower exists in CellMapper but is not verified.';
    }else{
      cmBackgroundData=null;
-     if(status)status.textContent=data.error||'CellMapper did not return clean tower data.';
+     if(status)status.textContent='Not in CellMapper';
    }
 
    if(result){
-     const mainClass=data.ok?'card result ok':'notice';
+     const cmState=cellMapperFinalStatus(data);
+     const mainClass=cmState.key==='verified'
+       ? 'card result ok'
+       : cmState.key==='unverified'
+         ? 'card result unknown'
+         : 'notice';
+
+     const latOut=cmState.key==='not-in-cellmapper'
+       ? 'Not in CellMapper'
+       : (data.towerLatitude||t.latitude||'Not returned');
+     const lonOut=cmState.key==='not-in-cellmapper'
+       ? 'Not in CellMapper'
+       : (data.towerLongitude||t.longitude||'Not returned');
+
      result.innerHTML=`<div class="${mainClass}">
-       <h3>CellMapper Background Result</h3>
+       <h3>CellMapper Result</h3>
        <div class="kv">
          <div class="label">Tower ID</div><div>${esc(t.towerId||towerId)}</div>
-         <div class="label">Tower Latitude</div><div>${esc(data.towerLatitude||t.latitude||'Not returned')}</div>
-         <div class="label">Tower Longitude</div><div>${esc(data.towerLongitude||t.longitude||'Not returned')}</div>
-         <div class="label">TAC/LAC</div><div>${esc(t.tac||tac||'Not returned')}</div>
-         <div class="label">Cells</div><div>${esc(typeof t.cells==='object'?JSON.stringify(t.cells):String(t.cells||'Not returned'))}</div>
-         <div class="label">Sectors</div><div>${esc(typeof t.sectors==='object'?JSON.stringify(t.sectors):String(t.sectors||'Not returned'))}</div>
-         <div class="label">PCI/BSIC</div><div>${esc(t.pci||'Not returned')}</div>
+         <div class="label">CellMapper status</div><div><b>${esc(cmState.label)}</b></div>
+         <div class="label">Tower Latitude</div><div>${esc(latOut)}</div>
+         <div class="label">Tower Longitude</div><div>${esc(lonOut)}</div>
          <div class="label">System</div><div>${esc(t.system||radio)}</div>
-         <div class="label">Verified state</div><div>${esc(t.verification||t.subtype||'Unknown')}</div>
        </div>
-       ${data.ok
-         ? '<div class="small muted" style="margin-top:8px">Experimental CellMapper source. Review diagnostics before saving.</div>'
-         : `<div class="small" style="margin-top:8px"><b>Diagnostic result:</b> ${esc(data.error||'No clean tower-specific data extracted.')}</div>`}
-     </div>
-     `;
+     </div>`;
    }
  }catch(e){
    cmBackgroundData=null;
@@ -3537,7 +3564,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v64-official-scan-add-saveall';
+  const BUILD='v65-official-three-state-saveall';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

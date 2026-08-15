@@ -216,7 +216,7 @@ main, .container, .content{
 
 <div class="wrap">
 <h1>Master Cellular Tower Registry</h1><div id="testBuildBanner" style="margin:8px 0 12px;padding:8px 12px;border-radius:10px;background:#4a2f00;color:#ffd98a;font-weight:700">
-TEST BUILD v57 — CELLMAPPER v9 DIAGNOSTICS
+TEST BUILD v58 — CELLMAPPER v13 GETTOWERS TRACE
 </div>
 <div id="deviceLayoutInfo" class="small muted" style="margin-top:4px"></div>
 <div class="muted">Editable offline tower registry with LTE/5G identifier math.</div>
@@ -345,7 +345,7 @@ Use 4G LTE for eNB searches and 5G NR for gNB searches.
 
 <div id="cmSearchPreview" style="margin-top:10px"></div>
 <div class="card" style="margin-top:12px">
-<h3>Background CellMapper Diagnostic Test</h3>
+<h3>Background CellMapper v13 Diagnostic Test</h3>
 <div class="small muted">
 This test stays inside Tower Registry. After a scan it sends PLMN, LTE/5G, eNB/gNB and TAC to your separately hosted backend.
 If CellMapper returns usable tower data, the fields are previewed here and can be transferred into Add/Edit.
@@ -1544,6 +1544,18 @@ function renderCellMapperDiagnostics(data,towerId){
  const panelPreview=data?.panelTextPreview??raw?.panelTextPreview??'';
 
  const sourceUrl=data?.networkSourceUrl||raw?.networkSourceUrl||'';
+ const getTowersPath=data?.getTowersPath||raw?.getTowersTrace?.path||'';
+ const getTowersFields=data?.getTowersFields||raw?.getTowersTrace?.fields||[];
+ const getTowersObjectPreview=data?.getTowersObjectPreview||raw?.getTowersTrace?.preview||null;
+
+ const section=(title,val,empty='Not returned')=>{
+   const has=!(val===undefined||val===null||val===false||val===''||(Array.isArray(val)&&val.length===0));
+   return `<details style="margin-top:10px">
+     <summary><b>${esc(title)}</b></summary>
+     <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto">${esc(has?cmDiagPretty(val):empty)}</pre>
+   </details>`;
+ };
+
  const sourceBlock=sourceUrl
    ? `<div class="label">Network source</div><div style="overflow-wrap:anywhere">${esc(cmShortUrl(sourceUrl))}</div>`
    : `<div class="label">Network source</div><div>None</div>`;
@@ -1567,15 +1579,17 @@ function renderCellMapperDiagnostics(data,towerId){
    : '<div class="small muted">No captured response summary available.</div>';
 
  return `<div class="card" style="margin-top:12px;border-left:4px solid #7c9cff">
-   <h3>v9 CellMapper Diagnostics</h3>
+   <h3>v13 CellMapper Diagnostics</h3>
    <div class="small muted" style="margin-bottom:10px">
-     These values are diagnostic only. Map-center coordinates are intentionally separated from actual tower coordinates.
+     Test diagnostics only. getSite coordinates remain separate from map-center coordinates. getTowers is traced independently.
    </div>
 
    <div class="kv">
      <div class="label">Requested Tower</div><div>${esc(String(towerId||data?.towerId||''))}</div>
      <div class="label">Backend version</div><div>${esc(String(data?.version||'Unknown'))}</div>
      <div class="label">Network matched</div><div>${data?.networkMatched?'YES ✓':'NO'}</div>
+     <div class="label">Exact site matched</div><div>${data?.exactSiteMatched?'YES ✓':'NO'}</div>
+     <div class="label">Exact site ID</div><div>${esc(String(data?.exactSiteID||''))}</div>
      <div class="label">Network score</div><div>${esc(String(data?.networkScore??0))}</div>
      ${sourceBlock}
      <div class="label">Captured responses</div><div>${esc(String(data?.capturedNetworkResponses??0))}</div>
@@ -1588,6 +1602,14 @@ function renderCellMapperDiagnostics(data,towerId){
      <div class="label">Panel found</div><div>${data?.panelFound?'YES ✓':'NO'}</div>
      <div class="label">Panel score</div><div>${esc(String(data?.panelScore??0))}</div>
      <div class="label">Candidate fields</div><div style="overflow-wrap:anywhere">${esc(candidateFieldText)}</div>
+
+     <div class="label">getSite matched</div><div>${data?.getSiteMatched?'YES ✓':'NO'}</div>
+     <div class="label">getTowers matched</div><div>${data?.getTowersMatched?'YES ✓':'NO'}</div>
+     <div class="label">getTowers score</div><div>${esc(String(data?.getTowersScore??0))}</div>
+     <div class="label">getTowers path</div><div style="overflow-wrap:anywhere">${esc(getTowersPath||'Not returned')}</div>
+     <div class="label">getTowers fields</div><div style="overflow-wrap:anywhere">${esc((getTowersFields||[]).join(', ')||'None')}</div>
+
+     <div class="label">RAT subtype</div><div>${esc(cmDiagText(data?.ratSubtype||raw?.ratSubtype,''))}</div>
    </div>
 
    <details style="margin-top:12px">
@@ -1600,15 +1622,20 @@ function renderCellMapperDiagnostics(data,towerId){
      ${topRows}
    </details>
 
-   <details style="margin-top:10px">
-     <summary><b>Candidate JSON preview</b></summary>
-     <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto">${esc(candidatePreview?cmDiagPretty(candidatePreview):'No candidate object')}</pre>
-   </details>
+   ${section('getTowers matching object preview',getTowersObjectPreview,'No matching getTowers object preview')}
+   ${section('getTowers channels',data?.getTowersChannelsPreview)}
+   ${section('getTowers bandwidths',data?.getTowersBandwidthsPreview)}
+   ${section('getTowers bandNumbers',data?.getTowersBandNumbersPreview)}
+   ${section('getTowers estimatedBandData',data?.getTowersEstimatedBandDataPreview)}
+   ${section('getTowers frequencyData',data?.getTowersFrequencyDataPreview)}
+   ${section('getTowers bandwidthData',data?.getTowersBandwidthDataPreview)}
+   ${section('getTowers cells',data?.getTowersCellsPreview)}
+   ${section('getTowers towerAttributes',data?.getTowersTowerAttributesPreview)}
 
-   <details style="margin-top:10px">
-     <summary><b>Selected panel preview</b></summary>
-     <pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto">${esc(panelPreview||'No clean selected-tower panel text')}</pre>
-   </details>
+   ${section('Decoded getTowers data',data?.getTowersDecoded)}
+   ${section('Exact site decoded data',data?.exactSiteDecoded)}
+   ${section('Candidate JSON preview',candidatePreview,'No candidate object')}
+   ${section('Selected panel preview',panelPreview,'No clean selected-tower panel text')}
  </div>`;
 }
 
@@ -3226,7 +3253,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v57-cellmapper-diagnostics-cachefix';
+  const BUILD='v58-cellmapper-gettowers-trace';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

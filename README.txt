@@ -456,3 +456,22 @@ TEST FRONTEND v57 CACHE FIX:
 - Deletes old Cache API entries on test frontend load.
 - Performs one cache-busted reload per browser session.
 - Does NOT clear localStorage, so saved tower edits, PIN trust, and saved backend URL remain intact.
+
+
+TEST FRONTEND v58:
+- TEST only. Official v50 unchanged.
+- Designed for backend v13.
+- Displays getTowersMatched, getTowersScore, getTowersPath, getTowersFields.
+- Adds expandable previews for:
+  getTowers object
+  channels
+  bandwidths
+  bandNumbers
+  estimatedBandData
+  frequencyData
+  bandwidthData
+  cells
+  towerAttributes
+  decoded getTowers data
+  exact site decoded data
+- Cache key bumped again so Safari/GitHub Pages loads this build.

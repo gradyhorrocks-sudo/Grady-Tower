@@ -1,4 +1,4 @@
-const CACHE='tower-registry-v67-backend-status-fix';
+const CACHE='tower-registry-v68-video-download';
 const ASSETS=['./registry.json','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
 self.skipWaiting();

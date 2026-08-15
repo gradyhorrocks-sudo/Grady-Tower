@@ -1,4 +1,4 @@
-const CACHE='tower-registry-v58-cellmapper-gettowers-trace';
+const CACHE='tower-registry-v59-cellmapper-diagnostic-export';
 const ASSETS=['./','./index.html','./registry.json','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 self.skipWaiting();
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));

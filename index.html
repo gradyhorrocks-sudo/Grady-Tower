@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <head>
-<!-- Master Cellular Tower Registry frontend v74: current-state verification filter + live Search Towers refresh -->
+<!-- Master Cellular Tower Registry frontend v75: simple missing-tower Yes/No prompt -->
 
 <!-- Frontend v72: direct-URL recorded-click workflow diagnostics -->
 <meta charset="utf-8">
@@ -339,13 +339,8 @@ main, .container, .content{
 Enter the carrier, network type, and eNB/gNB. The app builds the correct CellMapper map for that carrier.
 Use 4G LTE for eNB searches, 3G UMTS for NodeB searches, and 5G NR for gNB searches.
 </div>
-<div style="margin-top:10px">
-<label>Automatic CellMapper Lookup</label>
-<select id="cmAutoMode">
-<option value="unknown" selected>Only for towers not already in Registry</option>
-<option value="off">Off</option>
-</select>
-<div class="small muted">Towers not already in the Registry are checked automatically. Existing registry towers are left alone.</div>
+<div class="notice small" style="margin-top:10px">
+If a scanned tower is not already in your Registry, the app will simply ask whether you want to add it.
 </div>
 
 
@@ -1603,51 +1598,9 @@ function carrierNameFromPlmn(plmn){
 }
 
 function setCellMapperPanelFromScan(fields,registryMatch){
- if(!fields)return;
-
- const mode=document.getElementById('cmAutoMode')?.value||'every';
- if(mode==='off')return;
- if(mode==='unknown' && registryMatch)return;
-
- const plmn=String(fields.plmn||'').replace(/\D/g,'');
- const carrier=carrierNameFromPlmn(plmn);
- const radio=String(fields.radio||'LTE').toUpperCase();
- const towerId=String(fields.sid||'').trim();
-
- if(!plmn || !towerId)return;
-
- const carrierSelect=document.getElementById('cmCarrier');
- const plmnInput=document.getElementById('cmPlmn');
- const radioSelect=document.getElementById('cmRadio');
- const idInput=document.getElementById('cmTowerId');
-
- if(carrierSelect){
-   const known=[...carrierSelect.options].some(o=>o.value===carrier);
-   carrierSelect.value=known?carrier:'custom';
- }
- if(plmnInput)plmnInput.value=plmn;
- if(radioSelect)radioSelect.value=(radio==='5G'||radio==='NR')?'NR':'LTE';
- if(idInput)idInput.value=towerId;
-
- previewCellMapperSearch();
-
- const preview=document.getElementById('cmSearchPreview');
- if(preview){
-   const current=preview.innerHTML;
-   preview.innerHTML=
-     `<div class="notice"><b>Auto-filled from Scan.</b> `+
-     `${registryMatch?'This tower already exists in the registry.':'This tower is not currently in the registry.'} `+
-     `Use Open CellMapper, then Search → Tower Search for ${esc(towerId)}.</div>`+
-     current;
- }
-
- // Automatically move the user to Search Towers where the CellMapper panel lives.
- showTab('lookup',document.querySelectorAll('.tab')[0]);
-
- // Scroll the CellMapper section into view.
- setTimeout(()=>{
-   document.getElementById('cmTowerId')?.scrollIntoView({behavior:'smooth',block:'center'});
- },180);
+ // v75: no automatic action for missing towers.
+ // CellMapper lookup remains available manually from Lookup.
+ return;
 }
 
 
@@ -3258,22 +3211,46 @@ function identifyFromScan(fields){
  </div>`;
 
 
- // AUTO_UNKNOWN_ROUTE_v40
- // Valid PLMN + derived eNB/gNB but no registry match => immediately open Add Unknown Scanned Tower.
+ // v75 SIMPLE MISSING-TOWER FLOW
+ // If the scan identifies a tower that is not in the Registry, do nothing automatically.
+ // Ask once. Yes opens Add/Edit with the scanned data; No leaves everything alone.
  if(!rec && fields && fields.plmn && fields.sid){
-   /* v49 test: CellMapper opens first; unknown add remains available manually */
- }
-
-
- // CELLMAPPER_EVERY_SCAN_TEST_v49
- // Testing mode sends EVERY successfully identified scan to the CellMapper Tower Search panel.
- if(fields && fields.plmn && fields.sid){
-   setTimeout(()=>{setCellMapperPanelFromScan(fields,rec||null);runBackgroundCellMapperLookup(fields);},260);
+   setTimeout(()=>{
+     const addIt=window.confirm('This tower is not in your Registry.\n\nAdd it?');
+     if(addIt){
+       openAddFromScan(fields);
+     }
+   },120);
  }
 }
 
 
 
+
+function openAddFromScan(fields){
+ if(!fields)return;
+ showTab('add',document.querySelectorAll('.tab')[4]);
+ clearForm();
+ const plmn=String(fields.plmn||'').replace(/\D/g,'');
+ const carrier=carrierNameFromPlmn(plmn);
+ const radio=String(fields.radio||'LTE').toUpperCase();
+ const set=(id,val)=>{const el=document.getElementById(id);if(el&&val!==undefined&&val!==null)el.value=val;};
+ set('fCarrier',carrier==='custom'?'':carrier);
+ set('fPlmn',plmn);
+ const pe=document.getElementById('fPlmn'); if(pe)pe.dataset.auto='0';
+ set('fRadio',(radio==='5G'||radio==='NR')?'5G':'LTE');
+ if(typeof updateIdLabel==='function')updateIdLabel();
+ set('fId',fields.sid||'');
+ set('fCellId',fields.cellId||fields.nci||'');
+ set('fBand',fields.band||'');
+ set('fBandwidth',fields.bandwidth||'');
+ set('fPci',fields.pci||'');
+ set('fTac',fields.tac||'');
+ set('fRsrp',fields.rsrp||'');
+ set('fRsrq',fields.rsrq||'');
+ set('fSnr',fields.snr||fields.sinr||'');
+ toast('Tower not added yet. Review it, then tap Save Tower if you want it.');
+}
 
 function cancelScannedTowerPlacement(){
  pendingScannedTowerForMap=null;

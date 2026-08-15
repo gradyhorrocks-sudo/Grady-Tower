@@ -215,7 +215,9 @@ main, .container, .content{
 </div>
 
 <div class="wrap">
-<h1>Master Cellular Tower Registry</h1>
+<h1>Master Cellular Tower Registry</h1><div id="testBuildBanner" style="margin:8px 0 12px;padding:8px 12px;border-radius:10px;background:#4a2f00;color:#ffd98a;font-weight:700">
+TEST BUILD v57 — CELLMAPPER v9 DIAGNOSTICS
+</div>
 <div id="deviceLayoutInfo" class="small muted" style="margin-top:4px"></div>
 <div class="muted">Editable offline tower registry with LTE/5G identifier math.</div>
 
@@ -3221,5 +3223,46 @@ runOcrBtn.addEventListener('click',async()=>{
 
 
 </script>
+
+<script>
+(function(){
+  const BUILD='v57-cellmapper-diagnostics-cachefix';
+  const KEY='towerRegistryFrontendBuildSeen';
+
+  async function refreshAppCaches(){
+    try{
+      if('caches' in window){
+        const names=await caches.keys();
+        await Promise.all(names.map(n=>{
+          if(!n.includes(BUILD)) return caches.delete(n);
+        }));
+      }
+
+      // Ask an old service worker to step aside. This does NOT clear localStorage,
+      // so saved registry data/PIN trust/backend URL remain untouched.
+      if('serviceWorker' in navigator){
+        const regs=await navigator.serviceWorker.getRegistrations();
+        for(const reg of regs){
+          try{ await reg.update(); }catch(e){}
+        }
+      }
+
+      const seen=sessionStorage.getItem(KEY);
+      if(seen!==BUILD){
+        sessionStorage.setItem(KEY,BUILD);
+        // One cache-busted reload so GitHub Pages/Safari requests fresh HTML/assets.
+        const u=new URL(location.href);
+        u.searchParams.set('build',BUILD);
+        if(location.search!==u.search){
+          location.replace(u.toString());
+        }
+      }
+    }catch(e){}
+  }
+
+  refreshAppCaches();
+})();
+</script>
+
 </body>
 </html>

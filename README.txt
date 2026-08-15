@@ -446,3 +446,13 @@ CELLMAPPER DIAGNOSTIC FRONTEND TEST v56:
   selected panel preview
 - Diagnostic information is shown even when backend returns ok:false.
 - Existing Add/Edit flow remains available only after a successful clean result.
+
+
+TEST FRONTEND v57 CACHE FIX:
+- Official v50 remains unchanged.
+- Adds visible TEST BUILD v57 — CELLMAPPER v9 DIAGNOSTICS banner.
+- Renames the section to Background CellMapper Diagnostic Test.
+- Bumps service-worker cache name.
+- Deletes old Cache API entries on test frontend load.
+- Performs one cache-busted reload per browser session.
+- Does NOT clear localStorage, so saved tower edits, PIN trust, and saved backend URL remain intact.

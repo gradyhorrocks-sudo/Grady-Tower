@@ -487,3 +487,13 @@ TEST FRONTEND v60 - VERIFIED CELLMAPPER AUTOFILL
   UNKNOWN -> do not auto-fill.
 - Autofill does NOT automatically save the record.
 - User still reviews the populated Add/Edit record and saves it to the carrier list.
+
+
+OFFICIAL v61
+- Promoted from the verified CellMapper autofill test build.
+- Green CellMapper marker = verified.
+- Verified tower autofills eNB/gNB + exact CellMapper tower coordinates into Add/Edit.
+- Red/unknown towers do not auto-fill.
+- Backup page spacing/padding reduced to make the page more compact.
+- Backup access no longer keeps a trusted session; the same configured password/PIN is required each time Backup is opened.
+- Test/diagnostic labeling removed from the production-facing UI.

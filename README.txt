@@ -408,3 +408,15 @@ SEARCH RESULT ADD/EDIT (TEST):
 - Tapping it opens the exact registry record in Add/Edit with existing fields prefilled.
 - User can add missing Cell ID/NCI, PCI, TAC, bands, bandwidth, notes, map location, name, or other details.
 - Existing-record changes still follow the app's normal pending Save All Changes workflow where applicable.
+
+SPARSE LTE CELL-ID SCAN:
+- A screenshot may contain only LTE Cell ID and Band.
+- Scanner calculates eNB = Cell ID // 256 and local cell = Cell ID % 256.
+- Derived eNB is matched against saved LTE registry records.
+- Matching registry data supplies carrier, PLMN, site name and other saved fields.
+- Scanned values remain authoritative for fields actually visible in the screenshot.
+- Example: Cell ID 273921 -> eNB 1070, local cell 1.
+
+SMALL SCAN PREVIEW:
+- Pasted/uploaded scan images display as a compact 110x82 px thumbnail so form text and controls remain readable.
+- OCR still processes the original full-resolution image; only the on-screen preview is reduced.

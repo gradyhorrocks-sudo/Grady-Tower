@@ -159,6 +159,44 @@ main, .container, .content{
   left:5px;
 }
 
+
+/* Compact scan-image preview: uploaded/pasted screenshots must never dominate the page. */
+#scanPreview,
+#preview,
+#imagePreview,
+#scanImagePreview,
+#screenshotPreview,
+.scan-preview img,
+.screenshot-preview img,
+.preview-image {
+  width: 110px !important;
+  max-width: 110px !important;
+  height: 82px !important;
+  max-height: 82px !important;
+  object-fit: contain !important;
+  object-position: center !important;
+  display: block !important;
+  margin: 8px auto !important;
+  border-radius: 8px !important;
+}
+
+/* Also constrain any image inside the Scan tab that is being used as a local preview. */
+#tab-scan img:not(.app-icon):not([data-fullsize]) {
+  max-width: 110px !important;
+  max-height: 82px !important;
+  object-fit: contain !important;
+}
+
+/* Keep preview wrappers compact instead of reserving screenshot-sized space. */
+#tab-scan .image-preview,
+#tab-scan .preview-wrap,
+#tab-scan .screenshot-wrap {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: 100px !important;
+  overflow: hidden !important;
+}
+
 </style>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 </head>
@@ -2466,7 +2504,80 @@ function extractScanFieldsSpatial(ocrData){
 
  return {radio,plmn,cell,sid,local,band,bw,pci,tac,rsrp,rsrq,snr};
 }
+
+// CELL-ID-ONLY LTE RECOVERY
+// Allows sparse screenshots containing only LTE Cell ID + Band.
+// LTE ECI math: eNB = ECI // 256; local cell = ECI % 256.
+// The derived eNB is then matched against the registry to recover carrier/PLMN/site/etc.
+
+function sparseLteMathBanner(fields){
+ if(!fields?._sparseLteMath)return '';
+ const r=fields._sparseLteMatch;
+ return `<div class="notice" style="margin-top:10px">
+ <b>LTE Cell ID math matched the registry.</b><br>
+ ${esc(fields._sparseLteMath)}
+ ${r?`<br><b>${esc(r.site||'Unnamed tower')}</b> · ${esc(r.carrier||'')} · Band ${esc(fields.band||r.bands||'Unknown')}`:''}
+ </div>`;
+}
+
+function enrichSparseLteScan(fields){
+ if(!fields)return fields||{};
+ const f={...fields};
+
+ const rawCell=String(f.cell||f.cell_id||'').replace(/\D/g,'');
+ if(!rawCell)return f;
+
+ // If OCR did not identify a radio, a normal LTE ECI plus a plain LTE band is enough
+ // to attempt LTE identifier math. Do not reinterpret a scan explicitly marked 5G/NR.
+ const explicitRadio=String(f.radio||'').toUpperCase();
+ if(explicitRadio==='5G'||explicitRadio==='NR')return f;
+
+ const eci=Number(rawCell);
+ if(!Number.isSafeInteger(eci)||eci<0)return f;
+
+ const derivedEnb=Math.floor(eci/256);
+ const derivedLocal=eci%256;
+
+ // Find every LTE registry record with this derived eNB.
+ const matches=(DB?.records||[]).filter(r =>
+   String(r.radio||'').toUpperCase()==='LTE' &&
+   String(r.eNB||'')===String(derivedEnb)
+ );
+
+ f.radio='LTE';
+ f.cell=String(eci);
+ f.sid=String(derivedEnb);
+ f.local=String(derivedLocal);
+
+ if(matches.length){
+   // Prefer a record whose saved bands include the scanned band.
+   const scannedBand=String(f.band||'').replace(/^B/i,'').trim();
+   let r=matches[0];
+   if(scannedBand){
+     const byBand=matches.find(x =>
+       String(x.bands||'').split(/[,\s/]+/).some(b=>b.replace(/^B/i,'')===scannedBand)
+     );
+     if(byBand)r=byBand;
+   }
+
+   f.carrier=f.carrier||r.carrier||'';
+   f.plmn=f.plmn||(
+     (typeof registryPlmnForRecord==='function' ? registryPlmnForRecord(r) : '') ||
+     Object.entries(DB?.plmns||{}).find(([p,n])=>n===r.carrier)?.[0] || ''
+   );
+   f.band=f.band||r.bands||'';
+   f.bandwidth=f.bandwidth||r.bandwidth||'';
+   f.pci=f.pci||r.pci||'';
+   f.tac=f.tac||r.tac||'';
+   f._sparseLteMatch=r;
+   f._sparseLteMath=`Cell ID ${eci} ÷ 256 → eNB ${derivedEnb}, local cell ${derivedLocal}`;
+ }
+ return f;
+}
+
 function identifyFromScan(fields){
+ fields=enrichSparseLteScan(fields);
+
  if(!DB)return;
  const plmn=fields.plmn||'', radio=fields.radio||'LTE', raw=fields.cell||'', sid=fields.sid||'';
 

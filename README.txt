@@ -475,3 +475,15 @@ TEST FRONTEND v58:
   decoded getTowers data
   exact site decoded data
 - Cache key bumped again so Safari/GitHub Pages loads this build.
+
+
+TEST FRONTEND v60 - VERIFIED CELLMAPPER AUTOFILL
+- TEST only. Official v50 remains unchanged.
+- Designed for CellMapper backend v17 verification-color detection.
+- Rule:
+  GREEN / verified -> automatically fill eNB/gNB + exact CellMapper tower latitude/longitude
+  into Add/Edit for the currently selected carrier.
+  RED / unverified -> do not auto-fill.
+  UNKNOWN -> do not auto-fill.
+- Autofill does NOT automatically save the record.
+- User still reviews the populated Add/Edit record and saves it to the carrier list.

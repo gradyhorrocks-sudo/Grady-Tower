@@ -216,7 +216,7 @@ main, .container, .content{
 
 <div class="wrap">
 <h1>Master Cellular Tower Registry</h1><div id="testBuildBanner" style="margin:8px 0 12px;padding:8px 12px;border-radius:10px;background:#4a2f00;color:#ffd98a;font-weight:700">
-TEST BUILD v59 — CELLMAPPER DIAGNOSTIC EXPORT
+TEST BUILD v60 — VERIFIED CELLMAPPER AUTOFILL
 </div>
 <div id="deviceLayoutInfo" class="small muted" style="margin-top:4px"></div>
 <div class="muted">Editable offline tower registry with LTE/5G identifier math.</div>
@@ -345,7 +345,7 @@ Use 4G LTE for eNB searches and 5G NR for gNB searches.
 
 <div id="cmSearchPreview" style="margin-top:10px"></div>
 <div class="card" style="margin-top:12px">
-<h3>Background CellMapper v13 Diagnostic Test</h3>
+<h3>Background CellMapper Verified Autofill Test</h3>
 <div class="small muted">
 This test stays inside Tower Registry. After a scan it sends PLMN, LTE/5G, eNB/gNB and TAC to your separately hosted backend.
 If CellMapper returns usable tower data, the fields are previewed here and can be transferred into Add/Edit.
@@ -354,6 +354,11 @@ If CellMapper returns usable tower data, the fields are previewed here and can b
 <button type="button" onclick="runBackgroundCellMapperLookup()">Run Background Lookup</button>
 <button type="button" class="secondary" onclick="fillBackgroundCellMapperIntoForm()">Fill Add/Edit</button>
 </div>
+
+<div class="notice small" style="margin-top:8px">
+  <b>Verified autofill rule:</b> Green CellMapper tower = verified and automatically fills the eNB/gNB plus tower coordinates into Add/Edit for the carrier you selected. Red or unknown towers do not auto-fill.
+</div>
+
 <div id="cmBackgroundStatus" class="small muted" style="margin-top:8px"></div>
 <div id="cmBackgroundResult" style="margin-top:8px"></div>
 </div>
@@ -1755,6 +1760,84 @@ document.addEventListener('DOMContentLoaded',()=>{
  if(input)input.value=getRemoteBackendUrl();
 });
 
+
+function autoFillVerifiedCellMapperTower(data, normalized, requested){
+  const verification=String(
+    data?.verification ||
+    data?.raw?.verification ||
+    normalized?.verification ||
+    ''
+  ).toLowerCase();
+
+  const markerColor=String(
+    data?.markerColor ||
+    data?.raw?.markerColor ||
+    data?.verificationColorResult?.markerColor ||
+    ''
+  ).toLowerCase();
+
+  const isVerified = verification==='verified' || markerColor==='green' || data?.verified===true;
+  if(!isVerified){
+    return {filled:false, reason:'CellMapper tower is not confirmed green/verified.'};
+  }
+
+  const towerId=String(
+    data?.exactSiteID ||
+    data?.towerId ||
+    normalized?.towerId ||
+    requested?.towerId ||
+    ''
+  ).trim();
+
+  const lat=String(
+    data?.towerLatitude ||
+    data?.latitude ||
+    data?.raw?.latitude ||
+    normalized?.latitude ||
+    ''
+  ).trim();
+
+  const lon=String(
+    data?.towerLongitude ||
+    data?.longitude ||
+    data?.raw?.longitude ||
+    normalized?.longitude ||
+    ''
+  ).trim();
+
+  if(!towerId || !lat || !lon){
+    return {filled:false, reason:'Verified tower found, but tower ID or coordinates were missing.'};
+  }
+
+  // Fill the existing Add/Edit form by reusing the app's current CellMapper transfer path.
+  // This preserves carrier/PLMN/radio already selected by the user.
+  cmBackgroundData = {
+    ...(normalized||{}),
+    towerId,
+    latitude:lat,
+    longitude:lon,
+    verification:'verified',
+    markerColor:'green'
+  };
+
+  try{
+    fillBackgroundCellMapperIntoForm();
+  }catch(e){
+    // Fallback: populate common Add/Edit fields directly if the transfer helper changes.
+    const setters = [
+      ['towerId',towerId],['siteId',towerId],['enb',towerId],['gnb',towerId],
+      ['latitude',lat],['lat',lat],['longitude',lon],['lon',lon],['lng',lon]
+    ];
+    for(const [id,val] of setters){
+      const el=document.getElementById(id);
+      if(el && !el.value) el.value=val;
+    }
+  }
+
+  return {filled:true,towerId,latitude:lat,longitude:lon};
+}
+
+
 async function runBackgroundCellMapperLookup(fieldsOverride){
  const status=document.getElementById('cmBackgroundStatus');
  const result=document.getElementById('cmBackgroundResult');
@@ -1795,7 +1878,18 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
 
    if(data.ok){
      cmBackgroundData=normalized;
-     if(status)status.textContent='Background CellMapper response received. Review diagnostics before filling Add/Edit.';
+
+     const verifiedAutofill=autoFillVerifiedCellMapperTower(
+       data,
+       normalized,
+       {plmn,radio,towerId,tac}
+     );
+
+     if(status){
+       status.textContent=verifiedAutofill.filled
+         ? `CellMapper GREEN / VERIFIED ✓ — automatically filled tower ${verifiedAutofill.towerId} and coordinates into Add/Edit. Review, then save to the selected carrier list.`
+         : 'Background CellMapper response received. Tower was not confirmed green/verified, so coordinates were not auto-filled.';
+     }
    }else{
      cmBackgroundData=null;
      if(status)status.textContent=data.error||'Diagnostic run completed without clean tower data.';
@@ -3294,7 +3388,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v59-cellmapper-diagnostic-export';
+  const BUILD='v60-verified-cellmapper-autofill';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

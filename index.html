@@ -2486,6 +2486,30 @@ function saveRecord(){
  renderRegistry();refreshCarrierList();if(towerMap)renderTowerMap();
  refreshUniversalLookupIfPresent();
  if(isNewRecord)clearForm();
+
+ // After a successful Save Tower action, return to Lookup and show the tower
+ // that was just saved so it is immediately obvious the save worked.
+ showTab('lookup',document.querySelectorAll('.tab')[0]);
+ const searchBox=document.getElementById('universalSearch');
+ if(searchBox)searchBox.value=id;
+ const verifyBox=document.getElementById('searchVerification');
+ if(verifyBox)verifyBox.value='all';
+ setTimeout(()=>{
+   refreshUniversalLookupIfPresent();
+   const out=document.getElementById('universalLookupOut');
+   if(out){
+     const firstCard=out.querySelector('.card,.record,.result');
+     if(firstCard){
+       try{firstCard.scrollIntoView({behavior:'smooth',block:'center'});}catch{}
+       firstCard.style.outline='3px solid #2563eb';
+       firstCard.style.outlineOffset='3px';
+       setTimeout(()=>{
+         firstCard.style.outline='';
+         firstCard.style.outlineOffset='';
+       },3500);
+     }
+   }
+ },0);
 }
 function editRecord(k){
  let r=DB.records.find(x=>keyOf(x)===k);if(!r)return;r=getEffectiveRecord(r);
@@ -2737,6 +2761,212 @@ function extractScanFields(text){
  return {radio,plmn,cell,sid,local,band,bw,pci,tac,rsrp,rsrq,snr};
 }
 
+function scanSignalExperienceHtml(fields,rr,rq,sr,overall){
+ const hasRsrp=String(fields?.rsrp||'').trim()!=='';
+ const hasRsrq=String(fields?.rsrq||'').trim()!=='';
+ const hasSnr=String(fields?.snr||'').trim()!=='';
+ const metricText=(kind,rating)=>{
+  const grade=rating?.[0]||'Unknown';
+  if(kind==='rsrp'){
+   return ({
+    'Excellent':'Strong signal strength. Expect a stable connection with good indoor reliability and little signal-strength limitation on speed.',
+    'Good':'Healthy signal strength. Expect reliable service and generally good speeds, with only modest loss in harder indoor areas.',
+    'Fair':'Moderate signal strength. Service should work, but speeds and consistency can drop indoors, behind terrain, or while moving.',
+    'Poor':'Weak signal strength. Expect slower or less consistent data, higher chance of band/site changes, and reduced indoor reliability.',
+    'Very Poor':'Very weak signal strength. Expect reduced speeds and reliability, possible buffering or stalls, and a greater chance of losing or changing the connection.'
+   })[grade]||'Signal strength could not be interpreted.';
+  }
+  if(kind==='rsrq'){
+   return ({
+    'Excellent':'Very clean signal quality. Interference and cell loading are unlikely to be limiting your experience.',
+    'Good':'Good signal quality. Interference/congestion does not appear to be a major problem.',
+    'Fair':'Moderate signal quality. Expect some speed fluctuation, retransmissions, or latency when the network gets busier.',
+    'Poor':'Poor signal quality. Expect inconsistent throughput, higher latency, and more retransmissions even if signal strength looks acceptable.',
+    'Very Poor':'Very poor signal quality. Heavy interference or loading may cause slow data, unstable speeds, high latency, and connection difficulty.'
+   })[grade]||'Signal quality could not be interpreted.';
+  }
+  return ({
+   'Excellent':'Excellent signal-to-interference margin. The radio can usually use efficient modulation, supporting strong speeds and low retransmission rates.',
+   'Good':'Good signal-to-interference margin. Expect solid data performance with relatively little interference-related slowdown.',
+   'Fair':'Moderate signal-to-interference margin. Data should work, but peak speeds may be limited and performance can fluctuate.',
+   'Poor':'Low signal-to-interference margin. Expect reduced modulation, slower speeds, higher latency, and more buffering or retransmissions.',
+   'Very Poor':'Very low signal-to-interference margin. Expect severe speed loss, instability, high latency, and possible difficulty keeping usable data service.'
+  })[grade]||'Signal-to-interference margin could not be interpreted.';
+ };
+ const rows=[];
+ if(hasRsrp)rows.push(`<div style="margin-top:7px"><b>RSRP ${rr[1]} ${esc(fields.rsrp)} dBm — ${esc(rr[0])}:</b> ${esc(metricText('rsrp',rr))}</div>`);
+ if(hasRsrq)rows.push(`<div style="margin-top:7px"><b>RSRQ ${rq[1]} ${esc(fields.rsrq)} dB — ${esc(rq[0])}:</b> ${esc(metricText('rsrq',rq))}</div>`);
+ if(hasSnr)rows.push(`<div style="margin-top:7px"><b>SNR/SINR ${sr[1]} ${esc(fields.snr)} dB — ${esc(sr[0])}:</b> ${esc(metricText('snr',sr))}</div>`);
+ if(!rows.length)return '';
+ const rank={'Excellent':4,'Good':3,'Fair':2,'Poor':1,'Very Poor':0};
+ const observed=[];
+ if(hasRsrp)observed.push({name:'weak signal strength',metric:'RSRP',grade:rr[0],score:rank[rr[0]]??-1});
+ if(hasRsrq)observed.push({name:'signal quality / interference',metric:'RSRQ',grade:rq[0],score:rank[rq[0]]??-1});
+ if(hasSnr)observed.push({name:'signal-to-interference margin',metric:'SNR/SINR',grade:sr[0],score:rank[sr[0]]??-1});
+ observed.sort((a,b)=>a.score-b.score);
+ const worst=observed[0];
+ let experience='';
+ if(overall==='Excellent')experience='Expect a strong, stable connection with good responsiveness and little radio-related limitation on data performance.';
+ else if(overall==='Good')experience='Expect reliable everyday service and generally good data performance. Brief slowdowns are more likely to come from network load than the radio link.';
+ else if(overall==='Fair')experience='Expect usable service, but speeds and latency may vary. Streaming and normal browsing should generally work, while peak speeds may be limited.';
+ else if(overall==='Poor')experience='Expect noticeably inconsistent performance: slower downloads, increased latency, possible buffering, and weaker reliability indoors or while moving.';
+ else if(overall==='Very Poor')experience='Expect poor real-world performance: slow or unstable data, higher latency, buffering or stalls, and a greater chance of the phone changing bands/sites or losing usable service.';
+ else experience='There is not enough signal information to predict the connection experience confidently.';
+ if(worst&&worst.score>=0&&worst.score<4)experience+=` The main radio limitation in this scan is ${worst.name} (${worst.metric}: ${worst.grade}).`;
+ return `<div class="notice" style="margin-top:12px"><b>What you should experience with this scan</b><div class="small" style="margin-top:6px">${rows.join('')}</div><div style="margin-top:10px"><b>Overall:</b> ${esc(experience)}</div></div>`;
+}
+
+
+function scanMetricExperience(kind, grade){
+  const text={
+    rsrp:{
+      'Excellent':'Strong signal. Calls should sound clear and data should be fast and stable.',
+      'Good':'Good signal. Calls should be clear and data should be reliable.',
+      'Fair':'Moderate signal. Calls should usually be fine, but data may slow or vary.',
+      'Poor':'Weak signal. Calls may become choppy or drop, and data speeds may be slower.',
+      'Very Poor':'Very weak signal. Calls may drop or break up, and data may become very slow or unreliable.'
+    },
+    rsrq:{
+      'Excellent':'Excellent signal quality. Expect stable speeds, low lag, and little buffering.',
+      'Good':'Good signal quality. Expect consistent speeds with little lag or buffering.',
+      'Fair':'Fair signal quality. Some speed changes, lag, or occasional buffering are possible.',
+      'Poor':'Poor signal quality. Expect inconsistent speeds, lag, and occasional buffering.',
+      'Very Poor':'Very poor signal quality. Expect unstable speeds, high lag, and frequent buffering.'
+    },
+    sinr:{
+      'Excellent':'Very little interference. Video should stream smoothly, calls should sound clear, and data should be fast.',
+      'Good':'Low interference. Video and calls should work well and data should stay responsive.',
+      'Fair':'Some interference. Video may occasionally lower quality and data speeds may fluctuate.',
+      'Poor':'Strong interference. Video may buffer, calls may sound rough, and data can become slow or unstable.',
+      'Very Poor':'Heavy interference. Video may buffer/drop quality, calls may sound robotic, and data can become very slow or unstable.'
+    }
+  };
+  return text[kind]?.[grade] || '';
+}
+function scanExperienceSummaryHtml(fields,rr,rq,sr){
+  const rows=[];
+  if(String(fields?.rsrp||'').trim()!==''){
+    rows.push(`<div style="margin-top:7px"><b>RSRP ${rr[1]} ${esc(fields.rsrp)} dBm — ${esc(rr[0])}</b><br>${esc(scanMetricExperience('rsrp',rr[0]))}</div>`);
+  }
+  if(String(fields?.rsrq||'').trim()!==''){
+    rows.push(`<div style="margin-top:7px"><b>RSRQ ${rq[1]} ${esc(fields.rsrq)} dB — ${esc(rq[0])}</b><br>${esc(scanMetricExperience('rsrq',rq[0]))}</div>`);
+  }
+  if(String(fields?.snr||'').trim()!==''){
+    rows.push(`<div style="margin-top:7px"><b>SNR/SINR ${sr[1]} ${esc(fields.snr)} dB — ${esc(sr[0])}</b><br>${esc(scanMetricExperience('sinr',sr[0]))}</div>`);
+  }
+  if(!rows.length) return '';
+  return `<div class="notice" style="margin-top:12px"><b>What this should feel like</b>${rows.join('')}</div>`;
+}
+
+
+function normalizeScannedBandForRadio(raw,radio){
+ let b=String(raw||'').trim().replace(/\s+/g,'');
+ if(!b)return '';
+ const r=String(radio||'').toUpperCase();
+
+ // Only accept a simple cellular band token. This prevents OCR garbage from
+ // silently entering the registry.
+ const m=b.match(/^(?:[bBnN])?(\d{1,3})$/);
+ if(!m)return '';
+
+ const num=String(Number(m[1]));
+ if(!num || num==='NaN')return '';
+
+ return r==='5G' ? `n${num}` : `B${num}`;
+}
+
+function mergeBandIntoList(existing,band,radio){
+ const add=normalizeScannedBandForRadio(band,radio);
+ if(!add)return {changed:false,value:String(existing||'').trim(),band:''};
+
+ const raw=String(existing||'').trim();
+ const tokens=raw
+   ? raw.split(/[\s,;/]+/).map(x=>x.trim()).filter(Boolean)
+   : [];
+
+ const normalized=tokens.map(x=>{
+   const m=String(x).match(/^(?:[bBnN])?(\d{1,3})$/);
+   if(!m)return String(x);
+   const num=String(Number(m[1]));
+   const prefix=/^[nN]/.test(x)?'n':(/^[bB]/.test(x)?'B':(String(radio).toUpperCase()==='5G'?'n':'B'));
+   return `${prefix}${num}`;
+ });
+
+ const exists=normalized.some(x=>String(x).toLowerCase()===add.toLowerCase());
+ if(exists)return {changed:false,value:normalized.join(' '),band:add};
+
+ normalized.push(add);
+
+ // Keep LTE B-bands and 5G n-bands numerically ordered where possible.
+ normalized.sort((a,b)=>{
+   const ap=/^n/i.test(a)?1:0, bp=/^n/i.test(b)?1:0;
+   if(ap!==bp)return ap-bp;
+   const an=Number(String(a).replace(/\D/g,'')),bn=Number(String(b).replace(/\D/g,''));
+   if(Number.isFinite(an)&&Number.isFinite(bn))return an-bn;
+   return String(a).localeCompare(String(b));
+ });
+
+ return {changed:true,value:normalized.join(' '),band:add};
+}
+
+function findExistingScanTower(carrier,radio,sid){
+ const id=String(sid||'').trim();
+ if(!id || !DB || !Array.isArray(DB.records))return null;
+
+ // Preferred match: carrier + radio + tower ID.
+ let rec=DB.records.find(r=>
+   String(r.carrier||'')===String(carrier||'') &&
+   String(r.radio||'')===String(radio||'') &&
+   String(r.eNB||r.gNB||'')===id
+ );
+ if(rec)return rec;
+
+ // If an older/minimal record was saved without useful carrier metadata,
+ // allow an ID-only fallback ONLY when it is unique for this radio type.
+ const matches=DB.records.filter(r=>
+   String(r.radio||'')===String(radio||'') &&
+   String(r.eNB||r.gNB||'')===id
+ );
+ return matches.length===1 ? matches[0] : null;
+}
+
+function autoAddScannedBandToExistingTower(baseRecord,fields){
+ if(!baseRecord || !fields?.band)return {changed:false};
+
+ const effective=(typeof getEffectiveRecord==='function')
+   ? getEffectiveRecord(baseRecord)
+   : baseRecord;
+
+ const merged=mergeBandIntoList(effective?.bands||baseRecord.bands||'',fields.band,fields.radio);
+ if(!merged.band || !merged.changed)return {changed:false,band:merged.band,value:merged.value};
+
+ // This specific enrichment is intentionally automatic and immediately saved.
+ // Update the actual record.
+ baseRecord.bands=merged.value;
+
+ // If this tower also has an unsaved Add/Edit preview, merge the automatic band
+ // into that preview too so the current UI cannot hide the newly learned band.
+ try{
+   const k=(typeof pendingKey==='function') ? pendingKey(baseRecord) : '';
+   if(k && typeof pendingTowerChanges!=='undefined' && pendingTowerChanges[k]){
+     pendingTowerChanges[k].changes={
+       ...pendingTowerChanges[k].changes,
+       bands:merged.value
+     };
+     if(typeof refreshPendingChangesUI==='function')refreshPendingChangesUI();
+   }
+ }catch(e){}
+
+ saveLocal();
+
+ try{renderRegistry();}catch(e){}
+ try{refreshUniversalLookupIfPresent();}catch(e){}
+ try{if(towerMap)renderTowerMap();}catch(e){}
+
+ toast(`Added ${merged.band} to ${baseRecord.site||baseRecord.eNB||baseRecord.gNB||'saved tower'}.`);
+ return {changed:true,band:merged.band,value:merged.value};
+}
+
 function identifyFromScan(fields){
  if(!DB)return;
  const plmn=fields.plmn||'';
@@ -2746,7 +2976,13 @@ function identifyFromScan(fields){
  const local=fields.local||'';
  const carrier=DB.plmns[plmn]||'Unknown';
 
- const rec=DB.records.find(r=>r.carrier===carrier&&r.radio===radio&&String(r.eNB||r.gNB)===String(sid));
+ const rec=findExistingScanTower(carrier,radio,sid);
+
+ // v80: existing tower + newly observed band = automatically enrich the saved record.
+ // This never creates a new tower; it only adds a band to an already-matched tower.
+ if(rec && fields.band){
+   autoAddScannedBandToExistingTower(rec,fields);
+ }
 
  let cls='unknown',name='UNMAPPED / UNKNOWN ?';
  if(rec){
@@ -2825,6 +3061,8 @@ function identifyFromScan(fields){
  SNR/SINR: ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]}`:'Unknown'}
  </div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
+ ${scanExperienceSummaryHtml(fields,rr,rq,sr)}
+ ${scanSignalExperienceHtml(fields,rr,rq,sr,overall)}
  
  ${rec?.notes?'<div class="small" style="margin-top:8px">'+esc(rec.notes)+'</div>':''}
  ${unknownAddButton}
@@ -3648,7 +3886,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v66-official-human-cellmapper';
+  const BUILD='v80-auto-enrich-existing-tower-band';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

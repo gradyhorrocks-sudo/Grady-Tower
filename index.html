@@ -1232,17 +1232,16 @@ function signalRating(kind,v){
  if(v===''||v===null||Number.isNaN(Number(v))) return ['Unknown','⚪'];
  v=Number(v);
  if(kind==='rsrp'){
-   if(v>=-80)return ['Excellent','🟢']; if(v>=-95)return ['Good','🟢']; if(v>=-105)return ['Fair','🟡']; if(v>=-115)return ['Poor','🟠']; return ['Very Poor','🔴'];
+   if(v>=-70)return ['Exceptional','🟢']; if(v>=-80)return ['Excellent','🟢']; if(v>=-90)return ['Very Good','🟢']; if(v>=-100)return ['Good','🟡']; if(v>=-110)return ['Moderate','🟡']; if(v>=-120)return ['Fair','🟠']; if(v>=-130)return ['Poor','🔴']; return ['Very Poor','🔴'];
  }
  if(kind==='rsrq'){
-   if(v>=-10)return ['Excellent','🟢']; if(v>=-15)return ['Good','🟢']; if(v>=-20)return ['Fair','🟡']; return ['Poor','🔴'];
+   if(v>=-7)return ['Exceptional','🟢']; if(v>=-10)return ['Excellent','🟢']; if(v>=-12)return ['Very Good','🟢']; if(v>=-15)return ['Good','🟡']; if(v>=-17)return ['Moderate','🟡']; if(v>=-20)return ['Fair','🟠']; if(v>=-25)return ['Poor','🔴']; return ['Very Poor','🔴'];
  }
  if(kind==='snr'){
-   if(v>=20)return ['Excellent','🟢']; if(v>=13)return ['Good','🟢']; if(v>=0)return ['Fair','🟡']; return ['Poor','🔴'];
+   if(v>=30)return ['Exceptional','🟢']; if(v>=25)return ['Excellent','🟢']; if(v>=20)return ['Very Good','🟢']; if(v>=15)return ['Good','🟡']; if(v>=10)return ['Moderate','🟡']; if(v>=5)return ['Fair','🟠']; if(v>=0)return ['Poor','🔴']; return ['Very Poor','🔴'];
  }
  return ['Unknown','⚪'];
 }
-
 
 
 function carrierMapColor(name,plmn){
@@ -2832,30 +2831,39 @@ function scanSignalExperienceHtml(fields,rr,rq,sr,overall){
 
 
 function scanMetricExperience(kind, grade){
-  const text={
-    rsrp:{
-      'Excellent':'Strong signal. Calls should sound clear and data should be fast and stable.',
-      'Good':'Good signal. Calls should be clear and data should be reliable.',
-      'Fair':'Moderate signal. Calls should usually be fine, but data may slow or vary.',
-      'Poor':'Weak signal. Calls may become choppy or drop, and data speeds may be slower.',
-      'Very Poor':'Very weak signal. Calls may drop or break up, and data may become very slow or unreliable.'
-    },
-    rsrq:{
-      'Excellent':'Excellent signal quality. Expect stable speeds, low lag, and little buffering.',
-      'Good':'Good signal quality. Expect consistent speeds with little lag or buffering.',
-      'Fair':'Fair signal quality. Some speed changes, lag, or occasional buffering are possible.',
-      'Poor':'Poor signal quality. Expect inconsistent speeds, lag, and occasional buffering.',
-      'Very Poor':'Very poor signal quality. Expect unstable speeds, high lag, and frequent buffering.'
-    },
-    sinr:{
-      'Excellent':'Very little interference. Video should stream smoothly, calls should sound clear, and data should be fast.',
-      'Good':'Low interference. Video and calls should work well and data should stay responsive.',
-      'Fair':'Some interference. Video may occasionally lower quality and data speeds may fluctuate.',
-      'Poor':'Strong interference. Video may buffer, calls may sound rough, and data can become slow or unstable.',
-      'Very Poor':'Heavy interference. Video may buffer/drop quality, calls may sound robotic, and data can become very slow or unstable.'
-    }
-  };
-  return text[kind]?.[grade] || '';
+ const text={
+  rsrp:{
+   'Exceptional':'Exceptional received power. Coverage itself should impose virtually no limitation; indoor penetration and mobility should be very dependable.',
+   'Excellent':'Very strong received power. Calls should remain stable and data should have plenty of signal margin indoors and while moving.',
+   'Very Good':'Strong received power. Coverage should be dependable with only minor weakening through buildings or terrain.',
+   'Good':'Healthy received power. Everyday service should be reliable, though deeper indoor areas may begin reducing speed or stability.',
+   'Moderate':'Usable received power with less margin. Indoor obstacles, terrain, or movement can cause more band/site changes and variable speeds.',
+   'Fair':'Weakening received power. Calls can become less robust and data may slow or fluctuate, especially indoors or near the cell edge.',
+   'Poor':'Weak received power. Expect reduced reliability, slower data, more handoffs/reselections, and a higher chance of call or session interruption.',
+   'Very Poor':'Marginal received power. Maintaining the radio link itself may be difficult, causing severe data slowdown, stalls, call breakup, or loss of service.'
+  },
+  rsrq:{
+   'Exceptional':'Exceptionally clean radio conditions with very little apparent interference or loading. Sessions should remain highly consistent.',
+   'Excellent':'Very clean signal quality. Interference and cell loading should have little effect on calls, latency, or throughput.',
+   'Very Good':'Clean signal quality. Only small efficiency losses are expected from interference or network loading.',
+   'Good':'Healthy signal quality. Normal loading or interference may trim peak performance but should not seriously disrupt sessions.',
+   'Moderate':'Noticeable interference or loading. Calls should usually remain usable, while data speed and latency may vary as conditions change.',
+   'Fair':'Degraded signal quality. Retransmissions and scheduling inefficiency can produce inconsistent data, extra latency, and occasional media hiccups.',
+   'Poor':'Heavy interference or loading. Expect unstable throughput, higher latency, more retransmissions, and possible call or session quality problems.',
+   'Very Poor':'Severely degraded quality. Even with decent signal strength, interference/loading can make calls unreliable and data sessions slow or unstable.'
+  },
+  sinr:{
+   'Exceptional':'The useful signal overwhelmingly dominates noise and interference. The radio can use its most efficient modulation and sustain very clean sessions.',
+   'Excellent':'Excellent signal clarity. High-efficiency modulation should work well, supporting fast data, smooth video, and very few radio retransmissions.',
+   'Very Good':'Very clean signal. Calls and video should be stable and data should remain fast with little interference-related loss.',
+   'Good':'Good clarity with some interference present. Normal calls, streaming, and data should work well, though peak throughput may be slightly reduced.',
+   'Moderate':'Moderate clarity. The modem may step down modulation, causing lower peak speeds and occasional latency or video-quality changes.',
+   'Fair':'Limited signal clarity. More retransmissions and conservative modulation can cause slower data, buffering, and less consistent call quality.',
+   'Poor':'Interference/noise is close to the wanted signal. Expect substantial speed loss, latency, buffering, and possible rough or unstable calls.',
+   'Very Poor':'Noise/interference rivals or exceeds the useful signal. Data can become extremely slow or stall and real-time sessions may break up or fail.'
+  }
+ };
+ return text[kind]?.[grade] || '';
 }
 function scanExperienceSummaryHtml(fields,rr,rq,sr){
   const rows=[];

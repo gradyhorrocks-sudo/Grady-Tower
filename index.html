@@ -245,6 +245,12 @@ main, .container, .content{
 
 </style>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))).catch(()=>{});
+}
+</script>
 </head>
 <body>
 
@@ -2312,6 +2318,14 @@ function lookup(){
  </div>
  <div style="margin-top:12px"><b>Signal: ${icon} ${overall}</b></div>
  <div class="small">RSRP: ${rsrp?`${rr[1]} ${esc(rsrp)} dBm · ${rr[0]}`:'Unknown'}<br>RSRQ: ${rsrq?`${rq[1]} ${esc(rsrq)} dB · ${rq[0]}`:'Unknown'}<br>SNR/SINR: ${snr?`${sr[1]} ${esc(snr)} dB · ${sr[0]}`:'Unknown'}</div>
+ <div class="scan-experience" style="margin:10px 0 2px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#0f172a">
+ <div style="font-weight:800;margin-bottom:4px">Expected experience</div>
+ <div class="small" style="line-height:1.5">
+  <div><b>📞 Calls:</b> ${overall==='Excellent'?'Clear and stable.':overall==='Good'?'Clear and generally stable.':overall==='Fair'?'Should work; brief audio issues possible.':overall==='Poor'?'May sound choppy or briefly cut out.':overall==='Very Poor'?'May break up, sound robotic, or drop.':'Not enough signal data.'}</div>
+  <div><b>🎬 Video:</b> ${overall==='Excellent'?'HD should stream smoothly.':overall==='Good'?'Should stream smoothly with little buffering.':overall==='Fair'?'May reduce quality or buffer occasionally.':overall==='Poor'?'Expect buffering and lower quality.':overall==='Very Poor'?'Frequent buffering and major quality drops likely.':'Not enough signal data.'}</div>
+  <div><b>🌐 Data:</b> ${overall==='Excellent'?'Fast, responsive, and consistent.':overall==='Good'?'Reliable speeds and responsive browsing.':overall==='Fair'?'Usable, but speeds may vary.':overall==='Poor'?'Slower, inconsistent speeds and more lag.':overall==='Very Poor'?'May be very slow, unstable, or unusable.':'Not enough signal data.'}</div>
+ </div>
+</div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math||'Enter Cell ID/NCI to calculate')}</div>
  
  ${rec?.notes?'<div class="small" style="margin-top:8px">'+esc(rec.notes)+'</div>':''}
@@ -3145,6 +3159,14 @@ function identifyFromScan(fields){
  SNR/SINR: ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]}`:'Unknown'}
  </div>
  ${experienceHtml}
+ <div class="scan-experience" style="margin:10px 0 2px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#0f172a">
+ <div style="font-weight:800;margin-bottom:4px">Expected experience</div>
+ <div class="small" style="line-height:1.5">
+  <div><b>📞 Calls:</b> ${overall==='Excellent'?'Clear and stable.':overall==='Good'?'Clear and generally stable.':overall==='Fair'?'Should work; brief audio issues possible.':overall==='Poor'?'May sound choppy or briefly cut out.':overall==='Very Poor'?'May break up, sound robotic, or drop.':'Not enough signal data.'}</div>
+  <div><b>🎬 Video:</b> ${overall==='Excellent'?'HD should stream smoothly.':overall==='Good'?'Should stream smoothly with little buffering.':overall==='Fair'?'May reduce quality or buffer occasionally.':overall==='Poor'?'Expect buffering and lower quality.':overall==='Very Poor'?'Frequent buffering and major quality drops likely.':'Not enough signal data.'}</div>
+  <div><b>🌐 Data:</b> ${overall==='Excellent'?'Fast, responsive, and consistent.':overall==='Good'?'Reliable speeds and responsive browsing.':overall==='Fair'?'Usable, but speeds may vary.':overall==='Poor'?'Slower, inconsistent speeds and more lag.':overall==='Very Poor'?'May be very slow, unstable, or unusable.':'Not enough signal data.'}</div>
+ </div>
+</div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  ${rec?.notes?'<div class="small" style="margin-top:8px">'+esc(rec.notes)+'</div>':''}
@@ -3578,6 +3600,14 @@ function identifyFromScan(fields){
      <div><b>🌐 Data:</b> ${overall==='Excellent'?'Excellent. Expect fast, responsive, consistent data.':overall==='Good'?'Good. Expect reliable speeds and responsive browsing.':overall==='Fair'?'Fair. Usable speeds, but performance may vary.':overall==='Poor'?'Poor. Expect slower, inconsistent speeds and more lag.':overall==='Very Poor'?'Very Poor. Data may be very slow, unstable, or temporarily unusable.':'Unknown. Not enough signal data to estimate data performance.'}</div>
    </div>
  </div>
+ <div class="scan-experience" style="margin:10px 0 2px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#0f172a">
+ <div style="font-weight:800;margin-bottom:4px">Expected experience</div>
+ <div class="small" style="line-height:1.5">
+  <div><b>📞 Calls:</b> ${overall==='Excellent'?'Clear and stable.':overall==='Good'?'Clear and generally stable.':overall==='Fair'?'Should work; brief audio issues possible.':overall==='Poor'?'May sound choppy or briefly cut out.':overall==='Very Poor'?'May break up, sound robotic, or drop.':'Not enough signal data.'}</div>
+  <div><b>🎬 Video:</b> ${overall==='Excellent'?'HD should stream smoothly.':overall==='Good'?'Should stream smoothly with little buffering.':overall==='Fair'?'May reduce quality or buffer occasionally.':overall==='Poor'?'Expect buffering and lower quality.':overall==='Very Poor'?'Frequent buffering and major quality drops likely.':'Not enough signal data.'}</div>
+  <div><b>🌐 Data:</b> ${overall==='Excellent'?'Fast, responsive, and consistent.':overall==='Good'?'Reliable speeds and responsive browsing.':overall==='Fair'?'Usable, but speeds may vary.':overall==='Poor'?'Slower, inconsistent speeds and more lag.':overall==='Very Poor'?'May be very slow, unstable, or unusable.':'Not enough signal data.'}</div>
+ </div>
+</div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  </div>`;
@@ -4022,7 +4052,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v83-force-visible-experience-20260815-2156';
+  const BUILD='v83-HARD-FIX-EXPERIENCE-2201';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -4091,7 +4121,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     return ['Unknown. Not enough signal data to estimate call quality.','Unknown. Not enough signal data to estimate streaming quality.','Unknown. Not enough signal data to estimate data performance.'];
   }
   function forceScanExperience(){
-    document.querySelectorAll('.card').forEach(card=>{
+    [...document.querySelectorAll('div')].filter(card=>{
+      const t=card.innerText||'';
+      return t.includes('Signal:') && t.includes('Math:');
+    }).sort((a,b)=>(a.innerText||'').length-(b.innerText||'').length).slice(0,3).forEach(card=>{
       if(card.querySelector('.scan-experience')) return;
       const text=card.innerText||'';
       if(!text.includes('Signal:') || !text.includes('Math:')) return;

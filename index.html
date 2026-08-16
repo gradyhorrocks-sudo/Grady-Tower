@@ -2969,49 +2969,48 @@ function autoAddScannedBandToExistingTower(baseRecord,fields){
 
 
 function compactExperienceSummaryHtml(fields,rr,rq,sr){
-  const rank={'Excellent':4,'Good':3,'Fair':2,'Poor':1,'Very Poor':0};
+  var rank={'Excellent':4,'Good':3,'Fair':2,'Poor':1,'Very Poor':0};
+  var scores=[];
 
-  const scores=[];
-  if(String(fields?.rsrp||'').trim()!=='')scores.push(rank[rr[0]]??0);
-  if(String(fields?.rsrq||'').trim()!=='')scores.push(rank[rq[0]]??0);
-  if(String(fields?.snr||'').trim()!=='')scores.push(rank[sr[0]]??0);
+  if(fields && String(fields.rsrp||'').trim()!=='') scores.push(rank[rr[0]]);
+  if(fields && String(fields.rsrq||'').trim()!=='') scores.push(rank[rq[0]]);
+  if(fields && String(fields.snr||'').trim()!=='') scores.push(rank[sr[0]]);
 
-  if(!scores.length)return '';
+  scores=scores.filter(function(v){return typeof v==='number' && !isNaN(v);});
+  if(!scores.length) return '';
 
-  const worst=Math.min(...scores);
-
-  let calls='', video='', data='';
+  var worst=Math.min.apply(null,scores);
+  var calls='',video='',data='';
 
   if(worst>=4){
-    calls='Excellent. Calls should sound clear and stay stable.';
-    video='Excellent. HD video should stream smoothly with little buffering.';
-    data='Excellent. Expect fast, responsive, and consistent data.';
+    calls='Excellent. Clear, stable calls.';
+    video='Excellent. Smooth HD streaming.';
+    data='Excellent. Fast and responsive.';
   }else if(worst===3){
-    calls='Good. Calls should sound clear with only minor issues in harder coverage.';
-    video='Good. Streaming should work well, with only occasional quality changes.';
-    data='Good. Expect reliable speeds and responsive browsing.';
+    calls='Good. Calls should be clear and stable.';
+    video='Good. Streaming should be smooth with little buffering.';
+    data='Good. Reliable speeds and responsive browsing.';
   }else if(worst===2){
-    calls='Fair. Calls should usually work, but brief audio issues are possible.';
-    video='Fair. Video should play, but may lower quality or buffer occasionally.';
+    calls='Fair. Calls should work, but brief audio issues are possible.';
+    video='Fair. Video may lower quality or buffer occasionally.';
     data='Fair. Usable speeds, but performance may vary.';
   }else if(worst===1){
-    calls='Poor. Calls may become choppy or briefly cut out.';
-    video='Poor. Expect buffering, slower starts, and lower video quality.';
-    data='Poor. Expect slower, inconsistent speeds and more lag.';
+    calls='Poor. Calls may sound choppy or briefly cut out.';
+    video='Poor. Expect buffering and lower video quality.';
+    data='Poor. Slower, inconsistent speeds and more lag.';
   }else{
-    calls='Very Poor. Calls may sound robotic, break up, or drop.';
-    video='Very Poor. Expect frequent buffering and major quality drops.';
-    data='Very Poor. Data may be very slow, unstable, or temporarily unusable.';
+    calls='Very Poor. Calls may break up or drop.';
+    video='Very Poor. Frequent buffering and major quality drops.';
+    data='Very Poor. Data may be very slow or unstable.';
   }
 
-  return `<div class="notice" style="margin-top:12px">
-    <b>Expected experience</b>
-    <div class="small" style="margin-top:6px">
-      <div><b>📞 Calls:</b> ${esc(calls)}</div>
-      <div style="margin-top:5px"><b>🎬 Video:</b> ${esc(video)}</div>
-      <div style="margin-top:5px"><b>🌐 Data:</b> ${esc(data)}</div>
-    </div>
-  </div>`;
+  return '<div class="notice" style="margin-top:10px;padding:10px 12px">'
+    +'<b>Expected experience</b>'
+    +'<div class="small" style="margin-top:5px;line-height:1.45">'
+    +'<b>📞 Calls:</b> '+esc(calls)+'<br>'
+    +'<b>🎬 Video:</b> '+esc(video)+'<br>'
+    +'<b>🌐 Data:</b> '+esc(data)
+    +'</div></div>';
 }
 
 function identifyFromScan(fields){
@@ -3107,10 +3106,8 @@ function identifyFromScan(fields){
  RSRQ: ${fields.rsrq?`${rq[1]} ${esc(fields.rsrq)} dB · ${rq[0]}`:'Unknown'}<br>
  SNR/SINR: ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]}`:'Unknown'}
  </div>
- <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  ${compactExperienceSummaryHtml(fields,rr,rq,sr)}
- ${scanExperienceSummaryHtml(fields,rr,rq,sr)}
- ${scanSignalExperienceHtml(fields,rr,rq,sr,overall)}
+ <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  ${rec?.notes?'<div class="small" style="margin-top:8px">'+esc(rec.notes)+'</div>':''}
  ${unknownAddButton}
@@ -3936,7 +3933,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v81-image-only-band-save-plus-compact-experience';
+  const BUILD='v82-visible-three-part-experience-summary';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

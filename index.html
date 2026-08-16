@@ -1231,41 +1231,24 @@ fetch('registry.json').then(r=>r.json()).then(j=>{
 function signalRating(kind,v){
  if(v===''||v===null||Number.isNaN(Number(v))) return ['Unknown','⚪'];
  v=Number(v);
- // Thresholds anchored to the supplied RF Connectivity chart:
- // Excellent: RSRP >= -80, RSRQ >= -10, SINR >= 20
- // Good:      RSRP -80..-90, RSRQ -10..-15, SINR 13..20
- // Medium:    RSRP -90..-100, RSRQ -15..-20, SINR 0..13
- // Weak:      RSRP <= -100, RSRQ < -20, SINR <= 0
- // Extra labels subdivide those four chart ranges without moving their boundaries.
+ // Exact four-level thresholds from the user's RF Connectivity chart.
  if(kind==='rsrp'){
-   if(v>=-70)return ['Exceptional','🟢'];
    if(v>=-80)return ['Excellent','🟢'];
-   if(v>=-85)return ['Very Good','🟢'];
-   if(v>=-90)return ['Good','🟢'];
-   if(v>=-95)return ['Moderate','🟡'];
-   if(v>-100)return ['Medium','🟡'];
-   if(v>=-110)return ['Weak','🟠'];
-   return ['Very Weak','🔴'];
+   if(v>-90)return ['Good','🟡'];
+   if(v>-100)return ['Medium','🟠'];
+   return ['Weak','🔴'];
  }
  if(kind==='rsrq'){
-   if(v>=-7)return ['Exceptional','🟢'];
    if(v>=-10)return ['Excellent','🟢'];
-   if(v>=-12)return ['Very Good','🟢'];
-   if(v>=-15)return ['Good','🟢'];
-   if(v>=-17.5)return ['Moderate','🟡'];
-   if(v>=-20)return ['Medium','🟡'];
-   if(v>=-25)return ['Weak','🟠'];
-   return ['Very Weak','🔴'];
+   if(v>-15)return ['Good','🟡'];
+   if(v>-20)return ['Medium','🟠'];
+   return ['Weak','🔴'];
  }
  if(kind==='snr'){
-   if(v>=30)return ['Exceptional','🟢'];
    if(v>=20)return ['Excellent','🟢'];
-   if(v>=16.5)return ['Very Good','🟢'];
-   if(v>=13)return ['Good','🟢'];
-   if(v>=6.5)return ['Moderate','🟡'];
-   if(v>0)return ['Medium','🟡'];
-   if(v>=-5)return ['Weak','🟠'];
-   return ['Very Weak','🔴'];
+   if(v>=13)return ['Good','🟡'];
+   if(v>0)return ['Medium','🟠'];
+   return ['Weak','🔴'];
  }
  return ['Unknown','⚪'];
 }
@@ -3112,35 +3095,34 @@ function identifyFromScan(fields){
 
  let overall='Unknown',icon='⚪';
  if(vals.length){
-   const rank={'Exceptional':7,'Excellent':6,'Very Good':5,'Good':4,'Moderate':3,'Medium':2,'Weak':1,'Very Weak':0};
-   const m=Math.min(...vals.map(x=>rank[x[0]]??0));
-   overall=Object.keys(rank).find(k=>rank[k]===m)||'Unknown';
-   icon=m>=4?'🟢':m>=2?'🟡':m===1?'🟠':'🔴';
+   // Combine the available measurements instead of letting one weak metric
+   // automatically force the entire connection to the worst category.
+   const rank={'Weak':0,'Medium':1,'Good':2,'Excellent':3};
+   const avg=vals.reduce((sum,x)=>sum+(rank[x[0]]??0),0)/vals.length;
+   const score=Math.max(0,Math.min(3,Math.round(avg)));
+   overall=['Weak','Medium','Good','Excellent'][score];
+   icon=['🔴','🟠','🟡','🟢'][score];
  }
 
  // v83: build the three experience descriptions directly inside identifyFromScan.
  // No helper call, no conditional rendering path to mysteriously vanish.
  let callsText='',videoText='',dataText='';
- if(overall==='Exceptional'||overall==='Excellent'){
+ if(overall==='Excellent'){
    callsText='Excellent. Calls should sound clear and stay stable.';
    videoText='Excellent. HD video should stream smoothly.';
    dataText='Excellent. Expect fast, responsive, consistent data.';
- }else if(overall==='Very Good'||overall==='Good'){
-   callsText='Good. Calls should sound clear and remain stable.';
+ }else if(overall==='Good'){
+   callsText='Good. Calls should be clear and generally stable.';
    videoText='Good. Streaming should be smooth with little buffering.';
    dataText='Good. Expect reliable speeds and responsive browsing.';
- }else if(overall==='Fair'){
-   callsText='Fair. Calls should work, but brief audio issues are possible.';
-   videoText='Fair. Video may lower quality or buffer occasionally.';
-   dataText='Fair. Usable speeds, but performance may vary.';
- }else if(overall==='Poor'){
-   callsText='Poor. Calls may sound choppy or briefly cut out.';
-   videoText='Poor. Expect buffering and lower video quality.';
-   dataText='Poor. Expect slower, inconsistent speeds and more lag.';
- }else if(overall==='Very Poor'){
-   callsText='Very Poor. Calls may break up, sound robotic, or drop.';
-   videoText='Very Poor. Expect frequent buffering and major quality drops.';
-   dataText='Very Poor. Data may be very slow, unstable, or temporarily unusable.';
+ }else if(overall==='Medium'){
+   callsText='Medium. Calls should usually work, but weak radio conditions can cause brief audio issues or instability.';
+   videoText='Medium. Video should work, but quality may change or buffer when conditions worsen.';
+   dataText='Medium. Data should be usable, though speeds and latency may vary.';
+ }else if(overall==='Weak'){
+   callsText='Weak. Calls may become choppy, robotic, unstable, or drop.';
+   videoText='Weak. Expect lower quality, buffering, or stalls.';
+   dataText='Weak. Data may be slow, inconsistent, or temporarily unusable.';
  }else{
    callsText='Unknown. Not enough signal data to estimate call quality.';
    videoText='Unknown. Not enough signal data to estimate streaming quality.';
@@ -3547,33 +3529,32 @@ function identifyFromScan(fields){
  const vals=[]; if(fields.rsrp)vals.push(rr); if(fields.rsrq)vals.push(rq); if(fields.snr)vals.push(sr);
  let overall='Unknown',icon='⚪';
  if(vals.length){
-   const rank={'Exceptional':7,'Excellent':6,'Very Good':5,'Good':4,'Moderate':3,'Medium':2,'Weak':1,'Very Weak':0};
-   const m=Math.min(...vals.map(x=>rank[x[0]]??0));
-   overall=Object.keys(rank).find(k=>rank[k]===m)||'Unknown';
-   icon=m>=4?'🟢':m>=2?'🟡':m===1?'🟠':'🔴';
+   // Combine the available measurements instead of letting one weak metric
+   // automatically force the entire connection to the worst category.
+   const rank={'Weak':0,'Medium':1,'Good':2,'Excellent':3};
+   const avg=vals.reduce((sum,x)=>sum+(rank[x[0]]??0),0)/vals.length;
+   const score=Math.max(0,Math.min(3,Math.round(avg)));
+   overall=['Weak','Medium','Good','Excellent'][score];
+   icon=['🔴','🟠','🟡','🟢'][score];
  }
 
  let callsText='',videoText='',dataText='';
- if(overall==='Exceptional'||overall==='Excellent'){
+ if(overall==='Excellent'){
    callsText='Excellent. Calls should sound clear and stay stable.';
    videoText='Excellent. HD video should stream smoothly.';
    dataText='Excellent. Expect fast, responsive, consistent data.';
- }else if(overall==='Very Good'||overall==='Good'){
-   callsText='Good. Calls should sound clear and remain stable.';
+ }else if(overall==='Good'){
+   callsText='Good. Calls should be clear and generally stable.';
    videoText='Good. Streaming should be smooth with little buffering.';
    dataText='Good. Expect reliable speeds and responsive browsing.';
- }else if(overall==='Fair'){
-   callsText='Fair. Calls should work, but brief audio issues are possible.';
-   videoText='Fair. Video may lower quality or buffer occasionally.';
-   dataText='Fair. Usable speeds, but performance may vary.';
- }else if(overall==='Poor'){
-   callsText='Poor. Calls may sound choppy or briefly cut out.';
-   videoText='Poor. Expect buffering and lower video quality.';
-   dataText='Poor. Expect slower, inconsistent speeds and more lag.';
- }else if(overall==='Very Poor'){
-   callsText='Very Poor. Calls may break up, sound robotic, or drop.';
-   videoText='Very Poor. Expect frequent buffering and major quality drops.';
-   dataText='Very Poor. Data may be very slow, unstable, or temporarily unusable.';
+ }else if(overall==='Medium'){
+   callsText='Medium. Calls should usually work, but weak radio conditions can cause brief audio issues or instability.';
+   videoText='Medium. Video should work, but quality may change or buffer when conditions worsen.';
+   dataText='Medium. Data should be usable, though speeds and latency may vary.';
+ }else if(overall==='Weak'){
+   callsText='Weak. Calls may become choppy, robotic, unstable, or drop.';
+   videoText='Weak. Expect lower quality, buffering, or stalls.';
+   dataText='Weak. Data may be slow, inconsistent, or temporarily unusable.';
  }else{
    callsText='Unknown. Not enough signal data to estimate call quality.';
    videoText='Unknown. Not enough signal data to estimate streaming quality.';

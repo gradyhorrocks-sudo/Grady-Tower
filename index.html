@@ -3473,7 +3473,15 @@ function identifyFromScan(fields){
  }
 
  const carrier=DB.plmns[plmn]||'Unknown';
- const rec=DB.records.find(r=>r.carrier===carrier&&r.radio===radio&&String(r.eNB||r.gNB)===String(sid));
+ const rec=(typeof findExistingScanTower==='function')
+   ? findExistingScanTower(carrier,radio,sid)
+   : DB.records.find(r=>r.carrier===carrier&&r.radio===radio&&String(r.eNB||r.gNB)===String(sid));
+
+ // Automatic band enrichment is allowed ONLY for a real uploaded/pasted image OCR scan.
+ // Manual edits to the scan fields do not change the saved Registry band list.
+ if(rec && fields.band && fields._fromImageScan===true && typeof autoAddScannedBandToExistingTower==='function'){
+   autoAddScannedBandToExistingTower(rec,fields);
+ }
 
  let cls='unknown',name='UNMAPPED / UNKNOWN ?';
  if(rec){name=rec.site;cls=rec.status==='confirmed'?'ok':rec.status==='provisional'?'prov':'unknown';}
@@ -3487,6 +3495,33 @@ function identifyFromScan(fields){
    const m=Math.min(...vals.map(x=>rank[x[0]]??0));
    overall=Object.keys(rank).find(k=>rank[k]===m)||'Unknown';
    icon=m>=3?'🟢':m===2?'🟡':m===1?'🟠':'🔴';
+ }
+
+ let callsText='',videoText='',dataText='';
+ if(overall==='Excellent'){
+   callsText='Excellent. Calls should sound clear and stay stable.';
+   videoText='Excellent. HD video should stream smoothly.';
+   dataText='Excellent. Expect fast, responsive, consistent data.';
+ }else if(overall==='Good'){
+   callsText='Good. Calls should sound clear and remain stable.';
+   videoText='Good. Streaming should be smooth with little buffering.';
+   dataText='Good. Expect reliable speeds and responsive browsing.';
+ }else if(overall==='Fair'){
+   callsText='Fair. Calls should work, but brief audio issues are possible.';
+   videoText='Fair. Video may lower quality or buffer occasionally.';
+   dataText='Fair. Usable speeds, but performance may vary.';
+ }else if(overall==='Poor'){
+   callsText='Poor. Calls may sound choppy or briefly cut out.';
+   videoText='Poor. Expect buffering and lower video quality.';
+   dataText='Poor. Expect slower, inconsistent speeds and more lag.';
+ }else if(overall==='Very Poor'){
+   callsText='Very Poor. Calls may break up, sound robotic, or drop.';
+   videoText='Very Poor. Expect frequent buffering and major quality drops.';
+   dataText='Very Poor. Data may be very slow, unstable, or temporarily unusable.';
+ }else{
+   callsText='Unknown. Not enough signal data to estimate call quality.';
+   videoText='Unknown. Not enough signal data to estimate streaming quality.';
+   dataText='Unknown. Not enough signal data to estimate data performance.';
  }
 
  let math='';
@@ -3527,6 +3562,14 @@ function identifyFromScan(fields){
  <div class="small">RSRP: ${fields.rsrp?`${rr[1]} ${esc(fields.rsrp)} dBm · ${rr[0]}`:'Unknown'}<br>
  RSRQ: ${fields.rsrq?`${rq[1]} ${esc(fields.rsrq)} dB · ${rq[0]}`:'Unknown'}<br>
  SNR/SINR: ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]}`:'Unknown'}</div>
+ <div class="notice" style="margin-top:10px;padding:10px 12px">
+   <b>Expected experience</b>
+   <div class="small" style="margin-top:5px;line-height:1.5">
+     <div><b>📞 Calls:</b> ${esc(callsText)}</div>
+     <div><b>🎬 Video:</b> ${esc(videoText)}</div>
+     <div><b>🌐 Data:</b> ${esc(dataText)}</div>
+   </div>
+ </div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  </div>`;
@@ -3971,7 +4014,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v83-direct-inline-calls-video-data';
+  const BUILD='v83-current-active-scan-renderer-fixed';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

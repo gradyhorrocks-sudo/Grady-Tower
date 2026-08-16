@@ -3581,13 +3581,22 @@ function identifyFromScan(fields){
  <div class="label">TAC</div><div>${esc(fields.tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
  </div>
  <div style="margin-top:12px"><b>Signal: ${icon} ${overall}</b></div>
- <div class="small" style="line-height:1.5">
-  <div><b>RSRP:</b> ${fields.rsrp?`${rr[1]} ${esc(fields.rsrp)} dBm · ${rr[0]} — ${esc(scanMetricExperience('rsrp',rr[0]))}`:'Unknown'}</div>
-  <div><b>RSRQ:</b> ${fields.rsrq?`${rq[1]} ${esc(fields.rsrq)} dB · ${rq[0]} — ${esc(scanMetricExperience('rsrq',rq[0]))}`:'Unknown — signal quality/interference could not be measured from this scan.'}</div>
-  <div><b>SNR/SINR:</b> ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]} — ${esc(scanMetricExperience('sinr',sr[0]))}`:'Unknown'}</div>
+ <div class="scan-metric-breakdown" style="margin-top:10px;display:grid;gap:8px">
+  <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a">
+   <b>RSRP — Signal Strength</b>
+   <div class="small" style="margin-top:3px">${fields.rsrp?`${rr[1]} <b>${esc(rr[0])}: ${esc(fields.rsrp)} dBm</b><br>Measures how strongly the tower’s signal reaches your phone.<br><b>Effect:</b> ${esc(scanMetricExperience('rsrp',rr[0]))}`:'⚪ <b>Unknown</b><br>Signal strength could not be measured from this scan.'}</div>
+  </div>
+  <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a">
+   <b>RSRQ — Signal Quality / Congestion</b>
+   <div class="small" style="margin-top:3px">${fields.rsrq?`${rq[1]} <b>${esc(rq[0])}: ${esc(fields.rsrq)} dB</b><br>Measures how clean the LTE signal is relative to interference and network loading.<br><b>Effect:</b> ${esc(scanMetricExperience('rsrq',rq[0]))}`:'⚪ <b>Unknown</b><br>Measures signal quality, interference, and network loading.<br><b>Effect:</b> Unknown here, so interference or congestion impact cannot be determined.'}</div>
+  </div>
+  <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a">
+   <b>SNR/SINR — Signal Clarity</b>
+   <div class="small" style="margin-top:3px">${fields.snr?`${sr[1]} <b>${esc(sr[0])}: ${esc(fields.snr)} dB</b><br>Measures how much stronger the useful signal is than interference and noise.<br><b>Effect:</b> ${esc(scanMetricExperience('sinr',sr[0]))}`:'⚪ <b>Unknown</b><br>Signal clarity relative to interference and noise could not be measured from this scan.'}</div>
+  </div>
  </div>
  <div class="notice scan-experience" style="margin-top:10px;padding:10px 12px">
-   <b>Expected experience</b>
+   <b>Overall Expected Experience</b>
    <div class="small" style="margin-top:5px;line-height:1.5">
      <div><b>📞 Calls:</b> ${esc(callsText)}</div>
      <div><b>🎬 Video:</b> ${esc(videoText)}</div>
@@ -4095,45 +4104,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 
-<script>
-(function(){
-  function experienceText(overall){
-    const x=String(overall||'Unknown');
-    if(x==='Excellent') return ['Excellent. Calls should sound clear and stay stable.','Excellent. HD video should stream smoothly.','Excellent. Expect fast, responsive, consistent data.'];
-    if(x==='Good') return ['Good. Calls should sound clear and remain stable.','Good. Streaming should be smooth with little buffering.','Good. Expect reliable speeds and responsive browsing.'];
-    if(x==='Fair') return ['Fair. Calls should work, but brief audio issues are possible.','Fair. Video may lower quality or buffer occasionally.','Fair. Usable speeds, but performance may vary.'];
-    if(x==='Poor') return ['Poor. Calls may sound choppy or briefly cut out.','Poor. Expect buffering and lower video quality.','Poor. Expect slower, inconsistent speeds and more lag.'];
-    if(x==='Very Poor') return ['Very Poor. Calls may break up, sound robotic, or drop.','Very Poor. Expect frequent buffering and major quality drops.','Very Poor. Data may be very slow, unstable, or temporarily unusable.'];
-    return ['Unknown. Not enough signal data to estimate call quality.','Unknown. Not enough signal data to estimate streaming quality.','Unknown. Not enough signal data to estimate data performance.'];
-  }
-  function forceScanExperience(){
-    [...document.querySelectorAll('div')].filter(card=>{
-      const t=card.innerText||'';
-      return t.includes('Signal:') && t.includes('Math:');
-    }).sort((a,b)=>(a.innerText||'').length-(b.innerText||'').length).slice(0,3).forEach(card=>{
-      if(card.querySelector('.scan-experience')) return;
-      const text=card.innerText||'';
-      if(!text.includes('Signal:') || !text.includes('Math:')) return;
-      const math=[...card.querySelectorAll('div')].find(el=>/^Math:/.test((el.innerText||'').trim()));
-      if(!math) return;
-      const m=text.match(/Signal:\s*[^\n]*\s(Excellent|Good|Fair|Poor|Very Poor|Unknown)/);
-      const vals=experienceText(m?m[1]:'Unknown');
-      const box=document.createElement('div');
-      box.className='notice scan-experience';
-      box.style.cssText='margin-top:10px;padding:10px 12px';
-      box.innerHTML='<b>Expected experience</b><div class="small" style="margin-top:5px;line-height:1.5">'+
-        '<div><b>📞 Calls:</b> '+vals[0]+'</div>'+
-        '<div><b>🎬 Video:</b> '+vals[1]+'</div>'+
-        '<div><b>🌐 Data:</b> '+vals[2]+'</div></div>';
-      math.parentNode.insertBefore(box,math);
-    });
-  }
-  new MutationObserver(forceScanExperience).observe(document.documentElement,{subtree:true,childList:true});
-  document.addEventListener('click',()=>setTimeout(forceScanExperience,0),true);
-  setInterval(forceScanExperience,500);
-  window.addEventListener('load',forceScanExperience);
-})();
-</script>
+
 
 </body>
 </html>

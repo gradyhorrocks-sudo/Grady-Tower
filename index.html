@@ -3570,6 +3570,14 @@ function identifyFromScan(fields){
      <div><b>🌐 Data:</b> ${esc(dataText)}</div>
    </div>
  </div>
+ <div class="notice scan-experience" style="margin-top:10px;padding:10px 12px">
+   <b>Expected experience</b>
+   <div class="small" style="margin-top:5px;line-height:1.5">
+     <div><b>📞 Calls:</b> ${overall==='Excellent'?'Excellent. Calls should sound clear and stay stable.':overall==='Good'?'Good. Calls should sound clear and remain stable.':overall==='Fair'?'Fair. Calls should work, but brief audio issues are possible.':overall==='Poor'?'Poor. Calls may sound choppy or briefly cut out.':overall==='Very Poor'?'Very Poor. Calls may break up, sound robotic, or drop.':'Unknown. Not enough signal data to estimate call quality.'}</div>
+     <div><b>🎬 Video:</b> ${overall==='Excellent'?'Excellent. HD video should stream smoothly.':overall==='Good'?'Good. Streaming should be smooth with little buffering.':overall==='Fair'?'Fair. Video may lower quality or buffer occasionally.':overall==='Poor'?'Poor. Expect buffering and lower video quality.':overall==='Very Poor'?'Very Poor. Expect frequent buffering and major quality drops.':'Unknown. Not enough signal data to estimate streaming quality.'}</div>
+     <div><b>🌐 Data:</b> ${overall==='Excellent'?'Excellent. Expect fast, responsive, consistent data.':overall==='Good'?'Good. Expect reliable speeds and responsive browsing.':overall==='Fair'?'Fair. Usable speeds, but performance may vary.':overall==='Poor'?'Poor. Expect slower, inconsistent speeds and more lag.':overall==='Very Poor'?'Very Poor. Data may be very slow, unstable, or temporarily unusable.':'Unknown. Not enough signal data to estimate data performance.'}</div>
+   </div>
+ </div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  </div>`;
@@ -4014,7 +4022,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v83-current-active-scan-renderer-fixed';
+  const BUILD='v83-force-visible-experience-20260815-2156';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -4068,6 +4076,44 @@ document.addEventListener('DOMContentLoaded',()=>{
   obs.observe(count,{childList:true,characterData:true,subtree:true});
   refresh();
 });
+</script>
+
+
+<script>
+(function(){
+  function experienceText(overall){
+    const x=String(overall||'Unknown');
+    if(x==='Excellent') return ['Excellent. Calls should sound clear and stay stable.','Excellent. HD video should stream smoothly.','Excellent. Expect fast, responsive, consistent data.'];
+    if(x==='Good') return ['Good. Calls should sound clear and remain stable.','Good. Streaming should be smooth with little buffering.','Good. Expect reliable speeds and responsive browsing.'];
+    if(x==='Fair') return ['Fair. Calls should work, but brief audio issues are possible.','Fair. Video may lower quality or buffer occasionally.','Fair. Usable speeds, but performance may vary.'];
+    if(x==='Poor') return ['Poor. Calls may sound choppy or briefly cut out.','Poor. Expect buffering and lower video quality.','Poor. Expect slower, inconsistent speeds and more lag.'];
+    if(x==='Very Poor') return ['Very Poor. Calls may break up, sound robotic, or drop.','Very Poor. Expect frequent buffering and major quality drops.','Very Poor. Data may be very slow, unstable, or temporarily unusable.'];
+    return ['Unknown. Not enough signal data to estimate call quality.','Unknown. Not enough signal data to estimate streaming quality.','Unknown. Not enough signal data to estimate data performance.'];
+  }
+  function forceScanExperience(){
+    document.querySelectorAll('.card').forEach(card=>{
+      if(card.querySelector('.scan-experience')) return;
+      const text=card.innerText||'';
+      if(!text.includes('Signal:') || !text.includes('Math:')) return;
+      const math=[...card.querySelectorAll('div')].find(el=>/^Math:/.test((el.innerText||'').trim()));
+      if(!math) return;
+      const m=text.match(/Signal:\s*[^\n]*\s(Excellent|Good|Fair|Poor|Very Poor|Unknown)/);
+      const vals=experienceText(m?m[1]:'Unknown');
+      const box=document.createElement('div');
+      box.className='notice scan-experience';
+      box.style.cssText='margin-top:10px;padding:10px 12px';
+      box.innerHTML='<b>Expected experience</b><div class="small" style="margin-top:5px;line-height:1.5">'+
+        '<div><b>📞 Calls:</b> '+vals[0]+'</div>'+
+        '<div><b>🎬 Video:</b> '+vals[1]+'</div>'+
+        '<div><b>🌐 Data:</b> '+vals[2]+'</div></div>';
+      math.parentNode.insertBefore(box,math);
+    });
+  }
+  new MutationObserver(forceScanExperience).observe(document.documentElement,{subtree:true,childList:true});
+  document.addEventListener('click',()=>setTimeout(forceScanExperience,0),true);
+  setInterval(forceScanExperience,500);
+  window.addEventListener('load',forceScanExperience);
+})();
 </script>
 
 </body>

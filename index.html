@@ -3581,10 +3581,12 @@ function identifyFromScan(fields){
  <div class="label">TAC</div><div>${esc(fields.tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
  </div>
  <div style="margin-top:12px"><b>Signal: ${icon} ${overall}</b></div>
- <div class="small">RSRP: ${fields.rsrp?`${rr[1]} ${esc(fields.rsrp)} dBm · ${rr[0]}`:'Unknown'}<br>
- RSRQ: ${fields.rsrq?`${rq[1]} ${esc(fields.rsrq)} dB · ${rq[0]}`:'Unknown'}<br>
- SNR/SINR: ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]}`:'Unknown'}</div>
- <div class="notice" style="margin-top:10px;padding:10px 12px">
+ <div class="small" style="line-height:1.5">
+  <div><b>RSRP:</b> ${fields.rsrp?`${rr[1]} ${esc(fields.rsrp)} dBm · ${rr[0]} — ${esc(scanMetricExperience('rsrp',rr[0]))}`:'Unknown'}</div>
+  <div><b>RSRQ:</b> ${fields.rsrq?`${rq[1]} ${esc(fields.rsrq)} dB · ${rq[0]} — ${esc(scanMetricExperience('rsrq',rq[0]))}`:'Unknown — signal quality/interference could not be measured from this scan.'}</div>
+  <div><b>SNR/SINR:</b> ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]} — ${esc(scanMetricExperience('sinr',sr[0]))}`:'Unknown'}</div>
+ </div>
+ <div class="notice scan-experience" style="margin-top:10px;padding:10px 12px">
    <b>Expected experience</b>
    <div class="small" style="margin-top:5px;line-height:1.5">
      <div><b>📞 Calls:</b> ${esc(callsText)}</div>
@@ -3592,22 +3594,6 @@ function identifyFromScan(fields){
      <div><b>🌐 Data:</b> ${esc(dataText)}</div>
    </div>
  </div>
- <div class="notice scan-experience" style="margin-top:10px;padding:10px 12px">
-   <b>Expected experience</b>
-   <div class="small" style="margin-top:5px;line-height:1.5">
-     <div><b>📞 Calls:</b> ${overall==='Excellent'?'Excellent. Calls should sound clear and stay stable.':overall==='Good'?'Good. Calls should sound clear and remain stable.':overall==='Fair'?'Fair. Calls should work, but brief audio issues are possible.':overall==='Poor'?'Poor. Calls may sound choppy or briefly cut out.':overall==='Very Poor'?'Very Poor. Calls may break up, sound robotic, or drop.':'Unknown. Not enough signal data to estimate call quality.'}</div>
-     <div><b>🎬 Video:</b> ${overall==='Excellent'?'Excellent. HD video should stream smoothly.':overall==='Good'?'Good. Streaming should be smooth with little buffering.':overall==='Fair'?'Fair. Video may lower quality or buffer occasionally.':overall==='Poor'?'Poor. Expect buffering and lower video quality.':overall==='Very Poor'?'Very Poor. Expect frequent buffering and major quality drops.':'Unknown. Not enough signal data to estimate streaming quality.'}</div>
-     <div><b>🌐 Data:</b> ${overall==='Excellent'?'Excellent. Expect fast, responsive, consistent data.':overall==='Good'?'Good. Expect reliable speeds and responsive browsing.':overall==='Fair'?'Fair. Usable speeds, but performance may vary.':overall==='Poor'?'Poor. Expect slower, inconsistent speeds and more lag.':overall==='Very Poor'?'Very Poor. Data may be very slow, unstable, or temporarily unusable.':'Unknown. Not enough signal data to estimate data performance.'}</div>
-   </div>
- </div>
- <div class="scan-experience" style="margin:10px 0 2px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#0f172a">
- <div style="font-weight:800;margin-bottom:4px">Expected experience</div>
- <div class="small" style="line-height:1.5">
-  <div><b>📞 Calls:</b> ${overall==='Excellent'?'Clear and stable.':overall==='Good'?'Clear and generally stable.':overall==='Fair'?'Should work; brief audio issues possible.':overall==='Poor'?'May sound choppy or briefly cut out.':overall==='Very Poor'?'May break up, sound robotic, or drop.':'Not enough signal data.'}</div>
-  <div><b>🎬 Video:</b> ${overall==='Excellent'?'HD should stream smoothly.':overall==='Good'?'Should stream smoothly with little buffering.':overall==='Fair'?'May reduce quality or buffer occasionally.':overall==='Poor'?'Expect buffering and lower quality.':overall==='Very Poor'?'Frequent buffering and major quality drops likely.':'Not enough signal data.'}</div>
-  <div><b>🌐 Data:</b> ${overall==='Excellent'?'Fast, responsive, and consistent.':overall==='Good'?'Reliable speeds and responsive browsing.':overall==='Fair'?'Usable, but speeds may vary.':overall==='Poor'?'Slower, inconsistent speeds and more lag.':overall==='Very Poor'?'May be very slow, unstable, or unusable.':'Not enough signal data.'}</div>
- </div>
-</div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  </div>`;

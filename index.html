@@ -1231,18 +1231,44 @@ fetch('registry.json').then(r=>r.json()).then(j=>{
 function signalRating(kind,v){
  if(v===''||v===null||Number.isNaN(Number(v))) return ['Unknown','⚪'];
  v=Number(v);
+ // Thresholds anchored to the supplied RF Connectivity chart:
+ // Excellent: RSRP >= -80, RSRQ >= -10, SINR >= 20
+ // Good:      RSRP -80..-90, RSRQ -10..-15, SINR 13..20
+ // Medium:    RSRP -90..-100, RSRQ -15..-20, SINR 0..13
+ // Weak:      RSRP <= -100, RSRQ < -20, SINR <= 0
+ // Extra labels subdivide those four chart ranges without moving their boundaries.
  if(kind==='rsrp'){
-   if(v>=-70)return ['Exceptional','🟢']; if(v>=-80)return ['Excellent','🟢']; if(v>=-90)return ['Very Good','🟢']; if(v>=-100)return ['Good','🟡']; if(v>=-110)return ['Moderate','🟡']; if(v>=-120)return ['Fair','🟠']; if(v>=-130)return ['Poor','🔴']; return ['Very Poor','🔴'];
+   if(v>=-70)return ['Exceptional','🟢'];
+   if(v>=-80)return ['Excellent','🟢'];
+   if(v>=-85)return ['Very Good','🟢'];
+   if(v>=-90)return ['Good','🟢'];
+   if(v>=-95)return ['Moderate','🟡'];
+   if(v>-100)return ['Medium','🟡'];
+   if(v>=-110)return ['Weak','🟠'];
+   return ['Very Weak','🔴'];
  }
  if(kind==='rsrq'){
-   if(v>=-7)return ['Exceptional','🟢']; if(v>=-10)return ['Excellent','🟢']; if(v>=-12)return ['Very Good','🟢']; if(v>=-15)return ['Good','🟡']; if(v>=-17)return ['Moderate','🟡']; if(v>=-20)return ['Fair','🟠']; if(v>=-25)return ['Poor','🔴']; return ['Very Poor','🔴'];
+   if(v>=-7)return ['Exceptional','🟢'];
+   if(v>=-10)return ['Excellent','🟢'];
+   if(v>=-12)return ['Very Good','🟢'];
+   if(v>=-15)return ['Good','🟢'];
+   if(v>=-17.5)return ['Moderate','🟡'];
+   if(v>=-20)return ['Medium','🟡'];
+   if(v>=-25)return ['Weak','🟠'];
+   return ['Very Weak','🔴'];
  }
  if(kind==='snr'){
-   if(v>=30)return ['Exceptional','🟢']; if(v>=25)return ['Excellent','🟢']; if(v>=20)return ['Very Good','🟢']; if(v>=15)return ['Good','🟡']; if(v>=10)return ['Moderate','🟡']; if(v>=5)return ['Fair','🟠']; if(v>=0)return ['Poor','🔴']; return ['Very Poor','🔴'];
+   if(v>=30)return ['Exceptional','🟢'];
+   if(v>=20)return ['Excellent','🟢'];
+   if(v>=16.5)return ['Very Good','🟢'];
+   if(v>=13)return ['Good','🟢'];
+   if(v>=6.5)return ['Moderate','🟡'];
+   if(v>0)return ['Medium','🟡'];
+   if(v>=-5)return ['Weak','🟠'];
+   return ['Very Weak','🔴'];
  }
  return ['Unknown','⚪'];
 }
-
 
 function carrierMapColor(name,plmn){
  const n=String(name||'').toLowerCase();
@@ -2300,7 +2326,7 @@ function lookup(){
  const rr=signalRating('rsrp',rsrp),rq=signalRating('rsrq',rsrq),sr=signalRating('snr',snr);
  const vals=[rsrp?rr:null,rsrq?rq:null,snr?sr:null].filter(Boolean);
  let overall='Unknown',icon='⚪';
- if(vals.length){const rank={'Excellent':4,'Good':3,'Fair':2,'Poor':1,'Very Poor':0};let m=Math.min(...vals.map(x=>rank[x[0]]??0));overall=Object.keys(rank).find(k=>rank[k]===m)||'Unknown';icon=m>=3?'🟢':m===2?'🟡':m===1?'🟠':'🔴'}
+ if(vals.length){const rank={'Exceptional':7,'Excellent':6,'Very Good':5,'Good':4,'Moderate':3,'Medium':2,'Weak':1,'Very Weak':0};let m=Math.min(...vals.map(x=>rank[x[0]]??0));overall=Object.keys(rank).find(k=>rank[k]===m)||'Unknown';icon=m>=4?'🟢':m>=2?'🟡':m===1?'🟠':'🔴'}
  const tac=document.getElementById('lookupTac').value.trim();
  let tacnote='';
  if(carrier==='STRATA Networks'&&tac){tacnote=tac==='101'?'Other carriers NOT allowed to roam':tac==='102'?'Other carriers ARE allowed to roam':'No special TAC rule stored';}
@@ -2784,26 +2810,26 @@ function scanSignalExperienceHtml(fields,rr,rq,sr,overall){
    return ({
     'Excellent':'Strong signal strength. Expect a stable connection with good indoor reliability and little signal-strength limitation on speed.',
     'Good':'Healthy signal strength. Expect reliable service and generally good speeds, with only modest loss in harder indoor areas.',
-    'Fair':'Moderate signal strength. Service should work, but speeds and consistency can drop indoors, behind terrain, or while moving.',
-    'Poor':'Weak signal strength. Expect slower or less consistent data, higher chance of band/site changes, and reduced indoor reliability.',
-    'Very Poor':'Very weak signal strength. Expect reduced speeds and reliability, possible buffering or stalls, and a greater chance of losing or changing the connection.'
+    'Medium':'Moderate signal strength. Service should work, but speeds and consistency can drop indoors, behind terrain, or while moving.',
+    'Weak':'Weak signal strength. Expect slower or less consistent data, higher chance of band/site changes, and reduced indoor reliability.',
+    'Very Weak':'Very weak signal strength. Expect reduced speeds and reliability, possible buffering or stalls, and a greater chance of losing or changing the connection.'
    })[grade]||'Signal strength could not be interpreted.';
   }
   if(kind==='rsrq'){
    return ({
     'Excellent':'Very clean signal quality. Interference and cell loading are unlikely to be limiting your experience.',
     'Good':'Good signal quality. Interference/congestion does not appear to be a major problem.',
-    'Fair':'Moderate signal quality. Expect some speed fluctuation, retransmissions, or latency when the network gets busier.',
-    'Poor':'Poor signal quality. Expect inconsistent throughput, higher latency, and more retransmissions even if signal strength looks acceptable.',
-    'Very Poor':'Very poor signal quality. Heavy interference or loading may cause slow data, unstable speeds, high latency, and connection difficulty.'
+    'Medium':'Moderate signal quality. Expect some speed fluctuation, retransmissions, or latency when the network gets busier.',
+    'Weak':'Poor signal quality. Expect inconsistent throughput, higher latency, and more retransmissions even if signal strength looks acceptable.',
+    'Very Weak':'Very poor signal quality. Heavy interference or loading may cause slow data, unstable speeds, high latency, and connection difficulty.'
    })[grade]||'Signal quality could not be interpreted.';
   }
   return ({
    'Excellent':'Excellent signal-to-interference margin. The radio can usually use efficient modulation, supporting strong speeds and low retransmission rates.',
    'Good':'Good signal-to-interference margin. Expect solid data performance with relatively little interference-related slowdown.',
-   'Fair':'Moderate signal-to-interference margin. Data should work, but peak speeds may be limited and performance can fluctuate.',
-   'Poor':'Low signal-to-interference margin. Expect reduced modulation, slower speeds, higher latency, and more buffering or retransmissions.',
-   'Very Poor':'Very low signal-to-interference margin. Expect severe speed loss, instability, high latency, and possible difficulty keeping usable data service.'
+   'Medium':'Moderate signal-to-interference margin. Data should work, but peak speeds may be limited and performance can fluctuate.',
+   'Weak':'Low signal-to-interference margin. Expect reduced modulation, slower speeds, higher latency, and more buffering or retransmissions.',
+   'Very Weak':'Very low signal-to-interference margin. Expect severe speed loss, instability, high latency, and possible difficulty keeping usable data service.'
   })[grade]||'Signal-to-interference margin could not be interpreted.';
  };
  const rows=[];
@@ -2811,7 +2837,7 @@ function scanSignalExperienceHtml(fields,rr,rq,sr,overall){
  if(hasRsrq)rows.push(`<div style="margin-top:7px"><b>RSRQ ${rq[1]} ${esc(fields.rsrq)} dB — ${esc(rq[0])}:</b> ${esc(metricText('rsrq',rq))}</div>`);
  if(hasSnr)rows.push(`<div style="margin-top:7px"><b>SNR/SINR ${sr[1]} ${esc(fields.snr)} dB — ${esc(sr[0])}:</b> ${esc(metricText('snr',sr))}</div>`);
  if(!rows.length)return '';
- const rank={'Excellent':4,'Good':3,'Fair':2,'Poor':1,'Very Poor':0};
+ const rank={'Exceptional':7,'Excellent':6,'Very Good':5,'Good':4,'Moderate':3,'Medium':2,'Weak':1,'Very Weak':0};
  const observed=[];
  if(hasRsrp)observed.push({name:'weak signal strength',metric:'RSRP',grade:rr[0],score:rank[rr[0]]??-1});
  if(hasRsrq)observed.push({name:'signal quality / interference',metric:'RSRQ',grade:rq[0],score:rank[rq[0]]??-1});
@@ -2838,9 +2864,9 @@ function scanMetricExperience(kind, grade){
    'Very Good':'Strong received power. Coverage should be dependable with only minor weakening through buildings or terrain.',
    'Good':'Healthy received power. Everyday service should be reliable, though deeper indoor areas may begin reducing speed or stability.',
    'Moderate':'Usable received power with less margin. Indoor obstacles, terrain, or movement can cause more band/site changes and variable speeds.',
-   'Fair':'Weakening received power. Calls can become less robust and data may slow or fluctuate, especially indoors or near the cell edge.',
-   'Poor':'Weak received power. Expect reduced reliability, slower data, more handoffs/reselections, and a higher chance of call or session interruption.',
-   'Very Poor':'Marginal received power. Maintaining the radio link itself may be difficult, causing severe data slowdown, stalls, call breakup, or loss of service.'
+   'Medium':'Weakening received power. Calls can become less robust and data may slow or fluctuate, especially indoors or near the cell edge.',
+   'Weak':'Weak received power. Expect reduced reliability, slower data, more handoffs/reselections, and a higher chance of call or session interruption.',
+   'Very Weak':'Marginal received power. Maintaining the radio link itself may be difficult, causing severe data slowdown, stalls, call breakup, or loss of service.'
   },
   rsrq:{
    'Exceptional':'Exceptionally clean radio conditions with very little apparent interference or loading. Sessions should remain highly consistent.',
@@ -2848,9 +2874,9 @@ function scanMetricExperience(kind, grade){
    'Very Good':'Clean signal quality. Only small efficiency losses are expected from interference or network loading.',
    'Good':'Healthy signal quality. Normal loading or interference may trim peak performance but should not seriously disrupt sessions.',
    'Moderate':'Noticeable interference or loading. Calls should usually remain usable, while data speed and latency may vary as conditions change.',
-   'Fair':'Degraded signal quality. Retransmissions and scheduling inefficiency can produce inconsistent data, extra latency, and occasional media hiccups.',
-   'Poor':'Heavy interference or loading. Expect unstable throughput, higher latency, more retransmissions, and possible call or session quality problems.',
-   'Very Poor':'Severely degraded quality. Even with decent signal strength, interference/loading can make calls unreliable and data sessions slow or unstable.'
+   'Medium':'Degraded signal quality. Retransmissions and scheduling inefficiency can produce inconsistent data, extra latency, and occasional media hiccups.',
+   'Weak':'Heavy interference or loading. Expect unstable throughput, higher latency, more retransmissions, and possible call or session quality problems.',
+   'Very Weak':'Severely degraded quality. Even with decent signal strength, interference/loading can make calls unreliable and data sessions slow or unstable.'
   },
   sinr:{
    'Exceptional':'The useful signal overwhelmingly dominates noise and interference. The radio can use its most efficient modulation and sustain very clean sessions.',
@@ -2858,9 +2884,9 @@ function scanMetricExperience(kind, grade){
    'Very Good':'Very clean signal. Calls and video should be stable and data should remain fast with little interference-related loss.',
    'Good':'Good clarity with some interference present. Normal calls, streaming, and data should work well, though peak throughput may be slightly reduced.',
    'Moderate':'Moderate clarity. The modem may step down modulation, causing lower peak speeds and occasional latency or video-quality changes.',
-   'Fair':'Limited signal clarity. More retransmissions and conservative modulation can cause slower data, buffering, and less consistent call quality.',
-   'Poor':'Interference/noise is close to the wanted signal. Expect substantial speed loss, latency, buffering, and possible rough or unstable calls.',
-   'Very Poor':'Noise/interference rivals or exceeds the useful signal. Data can become extremely slow or stall and real-time sessions may break up or fail.'
+   'Medium':'Limited signal clarity. More retransmissions and conservative modulation can cause slower data, buffering, and less consistent call quality.',
+   'Weak':'Interference/noise is close to the wanted signal. Expect substantial speed loss, latency, buffering, and possible rough or unstable calls.',
+   'Very Weak':'Noise/interference rivals or exceeds the useful signal. Data can become extremely slow or stall and real-time sessions may break up or fail.'
   }
  };
  return text[kind]?.[grade] || '';
@@ -2991,7 +3017,7 @@ function autoAddScannedBandToExistingTower(baseRecord,fields){
 
 
 function compactExperienceSummaryHtml(fields,rr,rq,sr){
-  var rank={'Excellent':4,'Good':3,'Fair':2,'Poor':1,'Very Poor':0};
+  var rank={'Exceptional':7,'Excellent':6,'Very Good':5,'Good':4,'Moderate':3,'Medium':2,'Weak':1,'Very Weak':0};
   var scores=[];
 
   if(fields && String(fields.rsrp||'').trim()!=='') scores.push(rank[rr[0]]);
@@ -3013,17 +3039,17 @@ function compactExperienceSummaryHtml(fields,rr,rq,sr){
     video='Good. Streaming should be smooth with little buffering.';
     data='Good. Reliable speeds and responsive browsing.';
   }else if(worst===2){
-    calls='Fair. Calls should work, but brief audio issues are possible.';
-    video='Fair. Video may lower quality or buffer occasionally.';
-    data='Fair. Usable speeds, but performance may vary.';
+    calls='Medium. Calls should work, but brief audio issues are possible.';
+    video='Medium. Video may lower quality or buffer occasionally.';
+    data='Medium. Usable speeds, but performance may vary.';
   }else if(worst===1){
-    calls='Poor. Calls may sound choppy or briefly cut out.';
-    video='Poor. Expect buffering and lower video quality.';
-    data='Poor. Slower, inconsistent speeds and more lag.';
+    calls='Weak. Calls may sound choppy or briefly cut out.';
+    video='Weak. Expect buffering and lower video quality.';
+    data='Weak. Slower, inconsistent speeds and more lag.';
   }else{
-    calls='Very Poor. Calls may break up or drop.';
-    video='Very Poor. Frequent buffering and major quality drops.';
-    data='Very Poor. Data may be very slow or unstable.';
+    calls='Very Weak. Calls may break up or drop.';
+    video='Very Weak. Frequent buffering and major quality drops.';
+    data='Very Weak. Data may be very slow or unstable.';
   }
 
   return '<div class="notice" style="margin-top:10px;padding:10px 12px">'
@@ -3086,20 +3112,20 @@ function identifyFromScan(fields){
 
  let overall='Unknown',icon='⚪';
  if(vals.length){
-   const rank={'Excellent':4,'Good':3,'Fair':2,'Poor':1,'Very Poor':0};
+   const rank={'Exceptional':7,'Excellent':6,'Very Good':5,'Good':4,'Moderate':3,'Medium':2,'Weak':1,'Very Weak':0};
    const m=Math.min(...vals.map(x=>rank[x[0]]??0));
    overall=Object.keys(rank).find(k=>rank[k]===m)||'Unknown';
-   icon=m>=3?'🟢':m===2?'🟡':m===1?'🟠':'🔴';
+   icon=m>=4?'🟢':m>=2?'🟡':m===1?'🟠':'🔴';
  }
 
  // v83: build the three experience descriptions directly inside identifyFromScan.
  // No helper call, no conditional rendering path to mysteriously vanish.
  let callsText='',videoText='',dataText='';
- if(overall==='Excellent'){
+ if(overall==='Exceptional'||overall==='Excellent'){
    callsText='Excellent. Calls should sound clear and stay stable.';
    videoText='Excellent. HD video should stream smoothly.';
    dataText='Excellent. Expect fast, responsive, consistent data.';
- }else if(overall==='Good'){
+ }else if(overall==='Very Good'||overall==='Good'){
    callsText='Good. Calls should sound clear and remain stable.';
    videoText='Good. Streaming should be smooth with little buffering.';
    dataText='Good. Expect reliable speeds and responsive browsing.';
@@ -3521,18 +3547,18 @@ function identifyFromScan(fields){
  const vals=[]; if(fields.rsrp)vals.push(rr); if(fields.rsrq)vals.push(rq); if(fields.snr)vals.push(sr);
  let overall='Unknown',icon='⚪';
  if(vals.length){
-   const rank={'Excellent':4,'Good':3,'Fair':2,'Poor':1,'Very Poor':0};
+   const rank={'Exceptional':7,'Excellent':6,'Very Good':5,'Good':4,'Moderate':3,'Medium':2,'Weak':1,'Very Weak':0};
    const m=Math.min(...vals.map(x=>rank[x[0]]??0));
    overall=Object.keys(rank).find(k=>rank[k]===m)||'Unknown';
-   icon=m>=3?'🟢':m===2?'🟡':m===1?'🟠':'🔴';
+   icon=m>=4?'🟢':m>=2?'🟡':m===1?'🟠':'🔴';
  }
 
  let callsText='',videoText='',dataText='';
- if(overall==='Excellent'){
+ if(overall==='Exceptional'||overall==='Excellent'){
    callsText='Excellent. Calls should sound clear and stay stable.';
    videoText='Excellent. HD video should stream smoothly.';
    dataText='Excellent. Expect fast, responsive, consistent data.';
- }else if(overall==='Good'){
+ }else if(overall==='Very Good'||overall==='Good'){
    callsText='Good. Calls should sound clear and remain stable.';
    videoText='Good. Streaming should be smooth with little buffering.';
    dataText='Good. Expect reliable speeds and responsive browsing.';

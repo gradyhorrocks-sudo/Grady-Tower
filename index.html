@@ -3070,6 +3070,44 @@ function identifyFromScan(fields){
    icon=m>=3?'🟢':m===2?'🟡':m===1?'🟠':'🔴';
  }
 
+ // v83: build the three experience descriptions directly inside identifyFromScan.
+ // No helper call, no conditional rendering path to mysteriously vanish.
+ let callsText='',videoText='',dataText='';
+ if(overall==='Excellent'){
+   callsText='Excellent. Calls should sound clear and stay stable.';
+   videoText='Excellent. HD video should stream smoothly.';
+   dataText='Excellent. Expect fast, responsive, consistent data.';
+ }else if(overall==='Good'){
+   callsText='Good. Calls should sound clear and remain stable.';
+   videoText='Good. Streaming should be smooth with little buffering.';
+   dataText='Good. Expect reliable speeds and responsive browsing.';
+ }else if(overall==='Fair'){
+   callsText='Fair. Calls should work, but brief audio issues are possible.';
+   videoText='Fair. Video may lower quality or buffer occasionally.';
+   dataText='Fair. Usable speeds, but performance may vary.';
+ }else if(overall==='Poor'){
+   callsText='Poor. Calls may sound choppy or briefly cut out.';
+   videoText='Poor. Expect buffering and lower video quality.';
+   dataText='Poor. Expect slower, inconsistent speeds and more lag.';
+ }else if(overall==='Very Poor'){
+   callsText='Very Poor. Calls may break up, sound robotic, or drop.';
+   videoText='Very Poor. Expect frequent buffering and major quality drops.';
+   dataText='Very Poor. Data may be very slow, unstable, or temporarily unusable.';
+ }else{
+   callsText='Unknown. Not enough signal data to estimate call quality.';
+   videoText='Unknown. Not enough signal data to estimate streaming quality.';
+   dataText='Unknown. Not enough signal data to estimate data performance.';
+ }
+
+ const experienceHtml=`<div class="notice" style="margin-top:10px;padding:10px 12px">
+   <b>Expected experience</b>
+   <div class="small" style="margin-top:5px;line-height:1.5">
+     <div><b>📞 Calls:</b> ${esc(callsText)}</div>
+     <div><b>🎬 Video:</b> ${esc(videoText)}</div>
+     <div><b>🌐 Data:</b> ${esc(dataText)}</div>
+   </div>
+ </div>`;
+
  let tacnote='';
  const unknownAddButton = !rec
    ? `<div class="row" style="margin-top:12px">
@@ -3106,7 +3144,7 @@ function identifyFromScan(fields){
  RSRQ: ${fields.rsrq?`${rq[1]} ${esc(fields.rsrq)} dB · ${rq[0]}`:'Unknown'}<br>
  SNR/SINR: ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]}`:'Unknown'}
  </div>
- ${compactExperienceSummaryHtml(fields,rr,rq,sr)}
+ ${experienceHtml}
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  ${rec?.notes?'<div class="small" style="margin-top:8px">'+esc(rec.notes)+'</div>':''}
@@ -3933,7 +3971,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v82-visible-three-part-experience-summary';
+  const BUILD='v83-direct-inline-calls-video-data';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

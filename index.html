@@ -2967,6 +2967,53 @@ function autoAddScannedBandToExistingTower(baseRecord,fields){
  return {changed:true,band:merged.band,value:merged.value};
 }
 
+
+function compactExperienceSummaryHtml(fields,rr,rq,sr){
+  const rank={'Excellent':4,'Good':3,'Fair':2,'Poor':1,'Very Poor':0};
+
+  const scores=[];
+  if(String(fields?.rsrp||'').trim()!=='')scores.push(rank[rr[0]]??0);
+  if(String(fields?.rsrq||'').trim()!=='')scores.push(rank[rq[0]]??0);
+  if(String(fields?.snr||'').trim()!=='')scores.push(rank[sr[0]]??0);
+
+  if(!scores.length)return '';
+
+  const worst=Math.min(...scores);
+
+  let calls='', video='', data='';
+
+  if(worst>=4){
+    calls='Excellent. Calls should sound clear and stay stable.';
+    video='Excellent. HD video should stream smoothly with little buffering.';
+    data='Excellent. Expect fast, responsive, and consistent data.';
+  }else if(worst===3){
+    calls='Good. Calls should sound clear with only minor issues in harder coverage.';
+    video='Good. Streaming should work well, with only occasional quality changes.';
+    data='Good. Expect reliable speeds and responsive browsing.';
+  }else if(worst===2){
+    calls='Fair. Calls should usually work, but brief audio issues are possible.';
+    video='Fair. Video should play, but may lower quality or buffer occasionally.';
+    data='Fair. Usable speeds, but performance may vary.';
+  }else if(worst===1){
+    calls='Poor. Calls may become choppy or briefly cut out.';
+    video='Poor. Expect buffering, slower starts, and lower video quality.';
+    data='Poor. Expect slower, inconsistent speeds and more lag.';
+  }else{
+    calls='Very Poor. Calls may sound robotic, break up, or drop.';
+    video='Very Poor. Expect frequent buffering and major quality drops.';
+    data='Very Poor. Data may be very slow, unstable, or temporarily unusable.';
+  }
+
+  return `<div class="notice" style="margin-top:12px">
+    <b>Expected experience</b>
+    <div class="small" style="margin-top:6px">
+      <div><b>📞 Calls:</b> ${esc(calls)}</div>
+      <div style="margin-top:5px"><b>🎬 Video:</b> ${esc(video)}</div>
+      <div style="margin-top:5px"><b>🌐 Data:</b> ${esc(data)}</div>
+    </div>
+  </div>`;
+}
+
 function identifyFromScan(fields){
  if(!DB)return;
  const plmn=fields.plmn||'';
@@ -2980,7 +3027,7 @@ function identifyFromScan(fields){
 
  // v80: existing tower + newly observed band = automatically enrich the saved record.
  // This never creates a new tower; it only adds a band to an already-matched tower.
- if(rec && fields.band){
+ if(rec && fields.band && fields._fromImageScan===true){
    autoAddScannedBandToExistingTower(rec,fields);
  }
 
@@ -3061,6 +3108,7 @@ function identifyFromScan(fields){
  SNR/SINR: ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]}`:'Unknown'}
  </div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
+ ${compactExperienceSummaryHtml(fields,rr,rq,sr)}
  ${scanExperienceSummaryHtml(fields,rr,rq,sr)}
  ${scanSignalExperienceHtml(fields,rr,rq,sr,overall)}
  
@@ -3773,6 +3821,7 @@ function refreshFromScanInputs(){
  }
  document.getElementById('sId').value=x.sid;
  document.getElementById('sLocal').value=x.local;
+ x._fromImageScan=false;
  identifyFromScan(x);
 }
 ['sPlmn','sRadio','sCell','sBand','sBw','sPci','sTac','sRsrp','sRsrq','sSnr'].forEach(id=>{
@@ -3867,6 +3916,7 @@ runOcrBtn.addEventListener('click',async()=>{
    fields=mergeScanFields(fields,extractScanFieldsSpatial(d2));
    fields=mergeScanFields(fields,extractDiagnosticTextLines(d2.text||''));
 
+   fields._fromImageScan=true;
    fillScanResults(fields,(d1.text||'')+'\n--- ORIGINAL PASS ---\n'+(d2.text||''));
 
    if(fields.plmn&&fields.cell){
@@ -3886,7 +3936,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v80-auto-enrich-existing-tower-band';
+  const BUILD='v81-image-only-band-save-plus-compact-experience';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

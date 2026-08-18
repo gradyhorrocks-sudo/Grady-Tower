@@ -2225,6 +2225,156 @@
       "status": "confirmed",
       "bands": "B12 B71",
       "notes": "Same physical CellMapper site as eNB 96056; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork North ?",
+      "status": "provisional",
+      "bands": "B25 B71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863257"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork North ?",
+      "status": "provisional",
+      "bands": "B41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863262"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork 800 North ?",
+      "status": "provisional",
+      "bands": "B41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1854933"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork 800 North ?",
+      "status": "provisional",
+      "bands": "B71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1844892"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork Southwest ?",
+      "status": "provisional",
+      "bands": "B25",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1878397"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork Southwest ?",
+      "status": "provisional",
+      "bands": "B41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1849602"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork Southeast ?",
+      "status": "provisional",
+      "bands": "B25",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1878321"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork Southeast ?",
+      "status": "provisional",
+      "bands": "B41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1856035"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork East Canyon Road ?",
+      "status": "provisional",
+      "bands": "B25 B71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1104837"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork East Canyon Road ?",
+      "status": "provisional",
+      "bands": "B41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1841602"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Spanish Fork East Canyon Road ?",
+      "status": "provisional",
+      "bands": "B71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1841527"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Mapleton Heights ?",
+      "status": "provisional",
+      "bands": "B25 B71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863255"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Mapleton Heights ?",
+      "status": "provisional",
+      "bands": "B41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863260"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Mapleton Main Street ?",
+      "status": "provisional",
+      "bands": "B25 B71",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863256"
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "5G",
+      "site": "Mapleton Main Street ?",
+      "status": "provisional",
+      "bands": "B41",
+      "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
+      "gNB": "1863261"
     }
   ]
 }

@@ -1909,12 +1909,12 @@
     {
       "carrier": "AT&T",
       "radio": "LTE",
-      "site": "Vernal East Utah ?",
+      "site": "Ft Duchesne",
       "eNB": "450328",
       "bands": "B2 B66",
       "bandwidth": "",
-      "status": "provisional",
-      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+      "status": "confirmed",
+      "notes": "User-confirmed site name."
     },
     {
       "carrier": "AT&T",
@@ -1995,6 +1995,236 @@
       "bandwidth": "",
       "status": "provisional",
       "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "177401",
+      "site": "Helper Gun Club Road",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "Verified green CellMapper site; approximate address Gun Club Road, Helper, Utah. Co-located with eNB 186040."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "186040",
+      "site": "Helper Gun Club Road",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "Verified green CellMapper site; co-located with eNB 177401 at Helper Gun Club Road."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "94520",
+      "site": "Radio Tower Road",
+      "status": "confirmed",
+      "bands": "B2 B4 B12 B66",
+      "notes": "CellMapper approximate address: Radio Tower Road, Utah. Same physical site as eNB 198702."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "185726",
+      "site": "Tucker",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Tucker, Utah. Same physical site as eNB 175768."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "185727",
+      "site": "Mill Fork",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Mill Fork, Utah. Same physical site as eNB 177833."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "372333",
+      "site": "Salem Peak",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "CellMapper approximate address: Dixon Peak, Utah; mapped site is on Salem Peak Cell Tower Road. Same physical site as eNB 176776."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "882562",
+      "site": "Mapleton City Park",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Mapleton City Park, Mapleton, Utah."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "184851",
+      "site": "Bear Canyon Road",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Bear Canyon Road, Utah. Same physical site as eNB 90726."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "605936",
+      "site": "Sailboat Beach Day-Use Area",
+      "status": "confirmed",
+      "bands": "B2 B12 B66",
+      "notes": "CellMapper approximate address: Sailboat Beach Day-Use Area, State Route 314, Utah."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "92629",
+      "site": "Center Creek Cemetery",
+      "status": "confirmed",
+      "bands": "B2 B4 B12 B66 B71",
+      "notes": "CellMapper approximate address: Center Creek Cemetery, East 2400 South Street, Independence, Utah. Same physical site as eNB 183458."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "381641",
+      "site": "Francis East Country Lane",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: East Country Lane South, Francis, Utah."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "186025",
+      "site": "Kamas City Park",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "CellMapper approximate address: Kamas City Park, Kamas, Utah. Same physical site as eNB 97056."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "186029",
+      "site": "Oakley New Lane Road",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "CellMapper approximate address: New Lane Road Trail, Oakley, Utah. Same physical site as eNB 97055."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "96056",
+      "site": "Sunrise Ridge",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "CellMapper approximate address: Sunrise Ridge, Utah. Same physical site as eNB 186066."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "198702",
+      "site": "Radio Tower Road",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "Same physical CellMapper site as eNB 94520; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "175768",
+      "site": "Tucker",
+      "status": "confirmed",
+      "bands": "B12 B66 B71",
+      "notes": "Same physical CellMapper site as eNB 185726; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "177833",
+      "site": "Mill Fork",
+      "status": "confirmed",
+      "bands": "B4 B12 B66",
+      "notes": "Same physical CellMapper site as eNB 185727; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "176776",
+      "site": "Salem Peak",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "Same physical CellMapper site as eNB 372333; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "90726",
+      "site": "Bear Canyon Road",
+      "status": "confirmed",
+      "bands": "B2 B12 B71",
+      "notes": "Same physical CellMapper site as eNB 184851; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "183458",
+      "site": "Center Creek Cemetery",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "Same physical CellMapper site as eNB 92629; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "97056",
+      "site": "Kamas City Park",
+      "status": "confirmed",
+      "bands": "B2 B12 B66 B71",
+      "notes": "Same physical CellMapper site as eNB 186025; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "97055",
+      "site": "Oakley New Lane Road",
+      "status": "confirmed",
+      "bands": "B2 B12 B66",
+      "notes": "Same physical CellMapper site as eNB 186029; paired from adjacent/overlapping tower marker."
+    },
+    {
+      "carrier": "T-Mobile",
+      "plmn": "310260",
+      "radio": "LTE",
+      "eNB": "186066",
+      "site": "Sunrise Ridge",
+      "status": "confirmed",
+      "bands": "B12 B71",
+      "notes": "Same physical CellMapper site as eNB 96056; paired from adjacent/overlapping tower marker."
     }
   ]
 }

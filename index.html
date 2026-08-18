@@ -369,12 +369,42 @@ if('serviceWorker' in navigator){
 
 <div style="margin-top:12px"><button id="runOcrBtn" type="button">Scan & Identify</button></div>
 
+<div id="manualSignalBox" class="card" style="margin-top:12px;padding:14px">
+  <h3 style="margin:0 0 6px">Signal Values</h3>
+  <div class="small muted" style="margin-bottom:10px">
+    Use this with or without a screenshot. Enter a single reading such as <b>-115</b>, or a range such as
+    <b>-115 -135</b>, <b>-115 to -135</b>, or <b>-115 – -135</b>.
+    A range is graded across both endpoints and the conservative overall rating uses the weaker end.
+  </div>
+  <div class="grid">
+    <div>
+      <label>RSRP (dBm)</label>
+      <input id="manualRsrp" inputmode="text" placeholder="-115 or -115 -135">
+    </div>
+    <div>
+      <label>RSRQ (dB)</label>
+      <input id="manualRsrq" inputmode="text" placeholder="-15 or -15 -20">
+    </div>
+    <div>
+      <label>SNR / SINR (dB)</label>
+      <input id="manualSnr" inputmode="text" placeholder="4.7 or 4.7 - 10">
+    </div>
+  </div>
+  <button id="manualSignalSubmitBtn" type="button" class="good"
+    onclick="submitManualSignalValues()" style="width:100%;margin-top:12px;font-size:1.05rem">
+    Submit Signal Values
+  </button>
+  <div id="manualSignalStatus" class="small" style="margin-top:8px"></div>
+  <div id="manualSignalResult" style="margin-top:12px"></div>
+</div>
+
 <div id="ocrStatus" class="small muted" style="margin-top:10px" aria-live="polite"></div>
 
 <div id="scanIdentity" style="margin-top:12px"></div>
 <div id="scanResults" class="hidden" style="margin-top:12px">
 <div class="notice"><b>Review before using.</b> OCR can misread 0/O, 1/I and minus signs. The scanner now reads the number/value inside the same horizontal line band as each label. TAC, PCI, PLMN and Cell ID/NCI stay in their own rows.</div>
 <div class="grid" style="margin-top:12px">
+<div style="grid-column:1/-1"><label>Tower / Site Name</label><input id="sSite" placeholder="Tower/site name"></div>
 <div><label>PLMN</label><input id="sPlmn"></div>
 <div><label>Radio</label><select id="sRadio"><option>LTE</option><option>5G</option></select></div>
 <div><label>Cell ID / NCI</label><input id="sCell"></div>
@@ -387,6 +417,10 @@ if('serviceWorker' in navigator){
 <div><label>RSRP</label><input id="sRsrp"></div>
 <div><label>RSRQ</label><input id="sRsrq"></div>
 <div><label>SNR / SINR</label><input id="sSnr"></div>
+</div>
+<div style="margin-top:12px">
+  <button id="scanSaveAllBtn" class="good" type="button" onclick="saveAllScanEdits()" style="width:100%;font-size:1.05rem">Save All</button>
+  <div id="scanSaveAllStatus" class="small" style="margin-top:7px"></div>
 </div>
 <div style="margin-top:12px">
 <label>OCR text</label>
@@ -2622,7 +2656,7 @@ function clearScanPage(){
  ['ocrStatus','scanStatus','scanPasteStatus'].forEach(id=>{
    const el=document.getElementById(id); if(el)el.textContent='';
  });
- ['sPlmn','sRadio','sBand','sBw','sCell','sSid','sLocal','sPci','sTac','sRsrp','sRsrq','sSnr'].forEach(id=>{
+ ['sSite','sPlmn','sRadio','sBand','sBw','sCell','sSid','sId','sLocal','sPci','sTac','sRsrp','sRsrq','sSnr'].forEach(id=>{
    const el=document.getElementById(id); if(el)el.value='';
  });
 
@@ -3486,7 +3520,383 @@ function enrichSparseLteScan(fields){
  return f;
 }
 
+
+let activeScanRecordKey='';
+let scanSaveAllBusy=false;
+
+function resetScanSaveAllState(){
+ scanSaveAllBusy=false;
+ const btn=document.getElementById('scanSaveAllBtn');
+ const st=document.getElementById('scanSaveAllStatus');
+ if(btn){
+   btn.disabled=false;
+   btn.textContent='Save All';
+   btn.removeAttribute('aria-busy');
+ }
+ if(st)st.textContent='';
+}
+
+function currentScanEditFields(){
+ return {
+   site:(document.getElementById('sSite')?.value||'').trim(),
+   plmn:(document.getElementById('sPlmn')?.value||'').trim(),
+   radio:(document.getElementById('sRadio')?.value||'LTE').trim(),
+   cell:(document.getElementById('sCell')?.value||'').trim(),
+   sid:(document.getElementById('sId')?.value||'').trim(),
+   local:(document.getElementById('sLocal')?.value||'').trim(),
+   band:(document.getElementById('sBand')?.value||'').trim(),
+   bandwidth:(document.getElementById('sBw')?.value||'').trim(),
+   pci:(document.getElementById('sPci')?.value||'').trim(),
+   tac:(document.getElementById('sTac')?.value||'').trim()
+ };
+}
+
+function saveAllScanEdits(){
+ if(scanSaveAllBusy)return false;
+
+ const btn=document.getElementById('scanSaveAllBtn');
+ const st=document.getElementById('scanSaveAllStatus');
+ const f=currentScanEditFields();
+
+ if(!f.site){
+   if(st)st.textContent='Enter a tower/site name first.';
+   return false;
+ }
+ if(!f.sid){
+   if(st)st.textContent='No eNB/gNB is available to match this registry record.';
+   return false;
+ }
+
+ const carrier=(DB?.plmns?.[f.plmn])||'Unknown';
+
+ let rec=null;
+ if(activeScanRecordKey){
+   rec=DB.records.find(r=>keyOf(r)===activeScanRecordKey)||null;
+ }
+ if(!rec && typeof findExistingScanTower==='function'){
+   rec=findExistingScanTower(carrier,f.radio,f.sid);
+ }
+ if(!rec){
+   if(st)st.textContent='This tower is not in the Registry yet. Add it first, then Save All can update it here.';
+   return false;
+ }
+
+ const newKey=`${carrier}|${f.radio}|${f.sid}`;
+ const conflict=DB.records.find(r=>r!==rec && keyOf(r)===newKey);
+ if(conflict){
+   if(st)st.textContent='Save blocked: another registry record already uses this carrier + radio + ID.';
+   return false;
+ }
+
+ scanSaveAllBusy=true;
+ if(btn){
+   btn.disabled=true;
+   btn.textContent='✓ Saving…';
+   btn.setAttribute('aria-busy','true');
+ }
+ if(st)st.textContent='Saving tower changes…';
+
+ // Save all editable scan fields to the matched record.
+ rec.site=f.site;
+ rec.carrier=carrier;
+ rec.radio=f.radio;
+ rec.plmn=f.plmn;
+ if(f.radio==='LTE'){
+   rec.eNB=f.sid;
+   delete rec.gNB;
+ }else{
+   rec.gNB=f.sid;
+   delete rec.eNB;
+ }
+ rec.cell_id=f.cell;
+ rec.local_cell=f.local;
+ rec.pci=f.pci;
+ rec.tac=f.tac;
+ rec.bandwidth=f.bandwidth;
+
+ if(f.band){
+   if(typeof mergeBandIntoList==='function'){
+     const merged=mergeBandIntoList(rec.bands||'',f.band,f.radio);
+     rec.bands=merged.value||rec.bands||f.band;
+   }else{
+     rec.bands=f.band;
+   }
+ }
+
+ saveLocal();
+ activeScanRecordKey=keyOf(rec);
+
+ try{renderRegistry();}catch(e){}
+ try{refreshUniversalLookupIfPresent();}catch(e){}
+ try{if(towerMap)renderTowerMap();}catch(e){}
+
+ // Immediately update the visible result name too.
+ const resultTitle=document.querySelector('#scanIdentity .card.result h2');
+ if(resultTitle)resultTitle.textContent=f.site;
+
+ if(btn){
+   btn.textContent='✓ Saved';
+   btn.removeAttribute('aria-busy');
+ }
+ if(st)st.textContent='✓ All scan edits saved to the Registry.';
+
+ setTimeout(()=>{
+   scanSaveAllBusy=false;
+   if(btn){
+     btn.disabled=false;
+     btn.textContent='Save All';
+   }
+ },1600);
+
+ return true;
+}
+
+
+
+function normalizeSignalText(v){
+  return String(v||'')
+    .replace(/\u2212/g,'-')   // Unicode minus
+    .replace(/[–—]/g,'-')     // en/em dash
+    .trim();
+}
+
+function parseSignalEntry(raw){
+  let t=normalizeSignalText(raw);
+  if(!t) return {empty:true,values:[],display:''};
+
+  // "to" is an explicit range separator.
+  t=t.replace(/\bto\b/gi,' ~ ');
+
+  // First collect signed/unsigned numeric tokens.
+  const nums=[...t.matchAll(/[+-]?\d+(?:\.\d+)?/g)].map(m=>Number(m[0]));
+  if(!nums.length) return {error:'Enter a number such as -115, or a range such as -115 -135.'};
+
+  // A single number is the normal/common case.
+  if(nums.length===1){
+    return {values:[nums[0]],display:String(nums[0]),single:true};
+  }
+
+  let a=nums[0], b=nums[1];
+
+  // Human shorthand: "-115 -135" can be tokenized correctly already.
+  // If the second value lost its negative sign in something like "-115–135",
+  // interpret it as negative when the first RF metric value is negative.
+  const compact=t.replace(/\s+/g,'');
+  if(a<0 && b>0 && /-\d+(?:\.\d+)?[-~]\d/.test(compact)){
+    b=-b;
+  }
+
+  return {
+    values:[a,b],
+    display:`${a} to ${b}`,
+    range:true,
+    low:Math.min(a,b),
+    high:Math.max(a,b)
+  };
+}
+
+function rsrpGrade(v){
+  if(v<=-125)return {rank:0,label:'No Signal',emoji:'⚫'};
+  if(v<=-115)return {rank:1,label:'Poor',emoji:'🔴'};
+  if(v<=-105)return {rank:2,label:'Fair',emoji:'🟠'};
+  if(v<=-90)return {rank:3,label:'Good',emoji:'🟡'};
+  return {rank:4,label:'Excellent',emoji:'🟢'};
+}
+function rsrqGrade(v){
+  if(v<=-20)return {rank:1,label:'Poor',emoji:'🔴'};
+  if(v<=-15)return {rank:2,label:'Fair',emoji:'🟠'};
+  if(v<=-10)return {rank:3,label:'Good',emoji:'🟡'};
+  return {rank:4,label:'Excellent',emoji:'🟢'};
+}
+function sinrGrade(v){
+  if(v<0)return {rank:1,label:'Poor',emoji:'🔴'};
+  if(v<6)return {rank:2,label:'Fair',emoji:'🟠'};
+  if(v<11)return {rank:3,label:'Good',emoji:'🟡'};
+  return {rank:4,label:'Excellent',emoji:'🟢'};
+}
+function gradeRange(parsed, grader){
+  if(!parsed || !parsed.values?.length)return null;
+  const grades=parsed.values.map(grader);
+  const worst=grades.reduce((a,b)=>a.rank<=b.rank?a:b);
+  const best=grades.reduce((a,b)=>a.rank>=b.rank?a:b);
+  return {worst,best,grades};
+}
+function rangeGradeText(parsed,graded){
+  if(!parsed||!graded)return 'Unknown';
+  if(parsed.values.length===1)return `${graded.worst.emoji} ${graded.worst.label}: ${parsed.display}`;
+  if(graded.worst.label===graded.best.label)
+    return `${graded.worst.emoji} ${graded.worst.label}: ${parsed.display}`;
+  return `${graded.best.emoji} ${graded.best.label} → ${graded.worst.emoji} ${graded.worst.label}: ${parsed.display}`;
+}
+
+function metricEffect(kind, grade){
+  const label=grade?.label||'Unknown';
+  const effects={
+    rsrp:{
+      Excellent:'Strong coverage margin. Indoor use and movement should remain robust.',
+      Good:'Healthy received power. Everyday service should usually remain reliable.',
+      Fair:'Weaker coverage margin. Indoor areas, terrain, or movement can cause more variation.',
+      Poor:'Low received power. Calls and data can become unstable, especially indoors or while moving.',
+      'No Signal':'At this level the connection may be effectively unusable or unable to remain camped.'
+    },
+    rsrq:{
+      Excellent:'Very clean LTE quality with little evidence of interference or loading.',
+      Good:'Generally clean quality. Interference or loading should have limited impact.',
+      Fair:'Moderate quality loss. Congestion or interference can reduce consistency and throughput.',
+      Poor:'Heavy quality impairment. Retransmissions, latency, and unstable data are more likely.'
+    },
+    sinr:{
+      Excellent:'Useful signal strongly exceeds noise/interference, supporting efficient modulation and throughput.',
+      Good:'Good clarity. Data and calls should generally remain stable.',
+      Fair:'Limited clarity. More conservative modulation and retransmissions can reduce speed and consistency.',
+      Poor:'Noise/interference competes strongly with the useful signal, causing slow or unstable service.'
+    }
+  };
+  return effects[kind]?.[label]||'';
+}
+
+function overallManualGrade(items){
+  const valid=items.filter(Boolean);
+  if(!valid.length)return null;
+  // Conservative: use the weakest available endpoint grade.
+  return valid.reduce((a,b)=>a.rank<=b.rank?a:b);
+}
+
+function manualExperience(overall){
+  if(!overall)return null;
+  const x={
+    Excellent:{
+      calls:'Clear and stable with strong margin.',
+      video:'HD/high-quality streaming should be smooth.',
+      data:'Fast, responsive, and consistent.'
+    },
+    Good:{
+      calls:'Generally clear and stable.',
+      video:'Streaming should usually be smooth with little buffering.',
+      data:'Reliable speeds and responsive browsing.'
+    },
+    Fair:{
+      calls:'Usually usable, but weak spots or interference may cause occasional choppiness.',
+      video:'Should work, though quality shifts or buffering can appear as conditions worsen.',
+      data:'Usable but more variable, with slower bursts or higher latency possible.'
+    },
+    Poor:{
+      calls:'Choppy, robotic, unstable, or dropped calls become more likely.',
+      video:'Frequent buffering, quality drops, or stalls are possible.',
+      data:'Slow, inconsistent, or temporarily unusable sessions are possible.'
+    },
+    'No Signal':{
+      calls:'Calls may fail to start or drop immediately.',
+      video:'Streaming may not be usable.',
+      data:'Data service may fail or disconnect.'
+    }
+  }[overall.label];
+  return x;
+}
+
+function submitManualSignalValues(){
+  const btn=document.getElementById('manualSignalSubmitBtn');
+  const status=document.getElementById('manualSignalStatus');
+  const result=document.getElementById('manualSignalResult');
+
+  const rsrp=parseSignalEntry(document.getElementById('manualRsrp')?.value);
+  const rsrq=parseSignalEntry(document.getElementById('manualRsrq')?.value);
+  const snr=parseSignalEntry(document.getElementById('manualSnr')?.value);
+
+  const errors=[rsrp,rsrq,snr].filter(x=>x?.error);
+  if(errors.length){
+    if(status)status.textContent=errors[0].error;
+    if(result)result.innerHTML='';
+    return false;
+  }
+  if(rsrp.empty && rsrq.empty && snr.empty){
+    if(status)status.textContent='Enter at least one signal value.';
+    if(result)result.innerHTML='';
+    return false;
+  }
+
+  if(btn){
+    btn.disabled=true;
+    btn.textContent='✓ Submitted';
+  }
+
+  const rg=rsrp.empty?null:gradeRange(rsrp,rsrpGrade);
+  const qg=rsrq.empty?null:gradeRange(rsrq,rsrqGrade);
+  const sg=snr.empty?null:gradeRange(snr,sinrGrade);
+
+  // Keep legacy scan fields synchronized when present.
+  const set=(id,val)=>{const el=document.getElementById(id);if(el)el.value=val||''};
+  set('sRsrp',rsrp.empty?'':rsrp.display);
+  set('sRsrq',rsrq.empty?'':rsrq.display);
+  set('sSnr',snr.empty?'':snr.display);
+
+  const overall=overallManualGrade([
+    rg?.worst,qg?.worst,sg?.worst
+  ]);
+  const exp=manualExperience(overall);
+
+  function metricCard(title, parsed, graded, kind, unit){
+    if(parsed.empty)return `
+      <div class="manual-metric-card">
+        <b>${title}</b><br><span class="muted">Not entered</span>
+      </div>`;
+    return `
+      <div class="manual-metric-card">
+        <div><b>${title}</b></div>
+        <div style="margin-top:4px"><b>${rangeGradeText(parsed,graded)} ${unit}</b></div>
+        <div class="small" style="margin-top:5px"><b>Effect:</b> ${metricEffect(kind,graded.worst)}</div>
+        ${parsed.range?`<div class="small muted" style="margin-top:4px">Range entered. Overall analysis uses the weaker endpoint (${graded.worst.label}) conservatively.</div>`:''}
+      </div>`;
+  }
+
+  result.innerHTML=`
+    <style>
+      #manualSignalResult .manual-metric-card{
+        border:1px solid #34425a;border-radius:13px;padding:11px 12px;margin:8px 0;background:#0d1629
+      }
+      #manualSignalResult .manual-overall{
+        border:1px solid #856515;border-radius:13px;padding:12px;margin-top:10px;background:#44330d
+      }
+    </style>
+    <div style="font-size:1.1rem;font-weight:800;margin-bottom:8px">
+      Signal Analysis${overall?`: ${overall.emoji} ${overall.label}`:''}
+    </div>
+    ${metricCard('RSRP — Signal Strength',rsrp,rg,'rsrp','dBm')}
+    ${metricCard('RSRQ — Signal Quality / Congestion',rsrq,qg,'rsrq','dB')}
+    ${metricCard('SNR/SINR — Signal Clarity',snr,sg,'sinr','dB')}
+    ${overall&&exp?`
+      <div class="manual-overall">
+        <div style="font-weight:800;margin-bottom:6px">Overall Expected Experience — ${overall.emoji} ${overall.label}</div>
+        <div>📞 <b>Calls:</b> ${exp.calls}</div>
+        <div>🎬 <b>Video:</b> ${exp.video}</div>
+        <div>🌐 <b>Data:</b> ${exp.data}</div>
+      </div>`:''}
+  `;
+
+  if(status)status.textContent='✓ Signal values submitted. No screenshot is required.';
+  setTimeout(()=>{
+    if(btn){
+      btn.disabled=false;
+      btn.textContent='Submit Signal Values';
+    }
+  },1200);
+  return true;
+}
+
+// Compatibility: screenshot scans can still populate these fields automatically.
+// When that happens, no manual submit is required unless the user wants to re-run
+// the standalone analysis from corrected values.
+function applyManualSignalValues(){
+  return submitManualSignalValues();
+}
+
 function identifyFromScan(fields){
+ if(fields && fields._manualSignalOverride){
+   fields.rsrp=(document.getElementById('manualRsrp')?.value||fields.rsrp||'').trim();
+   fields.rsrq=(document.getElementById('manualRsrq')?.value||fields.rsrq||'').trim();
+   fields.snr=(document.getElementById('manualSnr')?.value||fields.snr||'').trim();
+ }
+
  fields=enrichSparseLteScan(fields);
 
  if(!DB)return;
@@ -3547,6 +3957,13 @@ function identifyFromScan(fields){
  let cls='unknown',name='UNMAPPED / UNKNOWN ?';
  if(rec){name=rec.site;cls=rec.status==='confirmed'?'ok':rec.status==='provisional'?'prov':'unknown';}
  if(carrier==='STRATA Networks'&&sid==='1079'){name='UNMAPPED STRATA SITE ?';cls='unknown';}
+
+ activeScanRecordKey=rec?keyOf(rec):'';
+ const scanSite=document.getElementById('sSite');
+ if(scanSite && document.activeElement!==scanSite){
+   scanSite.value=rec?.site||name||'';
+ }
+ resetScanSaveAllState();
 
  const rr=signalRating('rsrp',fields.rsrp),rq=signalRating('rsrq',fields.rsrq),sr=signalRating('snr',fields.snr);
  const vals=[]; if(fields.rsrp)vals.push(rr); if(fields.rsrq)vals.push(rq); if(fields.snr)vals.push(sr);
@@ -3910,6 +4327,8 @@ function prepareUnknownTowerFromScan(fields){
  },180);
 }
 function fillScanResults(x,text){
+ resetScanSaveAllState();
+ document.getElementById('sSite').value='';
  document.getElementById('sPlmn').value=x.plmn;
  document.getElementById('sRadio').value=x.radio;
  document.getElementById('sCell').value=x.cell;
@@ -3922,6 +4341,16 @@ function fillScanResults(x,text){
  document.getElementById('sRsrp').value=x.rsrp;
  document.getElementById('sRsrq').value=x.rsrq;
  document.getElementById('sSnr').value=x.snr;
+
+ // Mirror the screenshot's signal values into the dedicated manual box.
+ document.getElementById('manualRsrp').value=x.rsrp||'';
+ document.getElementById('manualRsrq').value=x.rsrq||'';
+ document.getElementById('manualSnr').value=x.snr||'';
+ const manualStatus=document.getElementById('manualSignalStatus');
+ if(manualStatus){
+   manualStatus.textContent='Using signal values from this screenshot.';
+ }
+
  document.getElementById('ocrText').value=text;
  document.getElementById('scanResults').classList.remove('hidden');
  identifyFromScan(x);
@@ -4092,7 +4521,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='WORK-NO-CELLMAPPER-NO-BACKUP-ATT-MAP-v6';
+  const BUILD='WORK-NO-CELLMAPPER-NO-BACKUP-MANUAL-SIGNAL-RANGES-SUBMIT-v10';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -4159,6 +4588,21 @@ function openCellMapperTowerSearch(){ return false; }
 function previewCellMapperSearch(){ return false; }
 function runBackgroundCellMapperLookup(){ return false; }
 function fillBackgroundCellMapperIntoForm(){ return false; }
+</script>
+
+
+<script>
+(function(){
+  function stripInvalidN1(){
+    document.querySelectorAll('input,textarea').forEach(el=>{
+      const label=(el.id||'')+' '+(el.name||'')+' '+(el.previousElementSibling?.textContent||'');
+      if(/band/i.test(label) && /^\s*n1\s*$/i.test(el.value||'')) el.value='';
+    });
+  }
+  document.addEventListener('input',stripInvalidN1,true);
+  document.addEventListener('change',stripInvalidN1,true);
+  setInterval(stripInvalidN1,1200);
+})();
 </script>
 
 </body>

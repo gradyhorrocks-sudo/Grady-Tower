@@ -20,3 +20,7 @@ Preserved:
 
 The full v91 frontend remains the authoritative full build.
 Backend remains v67.
+
+Added: Add/Edit now has a Back button that returns to the tab the user came from.
+
+Added: Save Tower now locks after the first tap, shows ✓ Saving… then ✓ Saved, and prevents accidental double-save taps from triggering the duplicate warning.

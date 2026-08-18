@@ -476,6 +476,9 @@ Map pin colors:
 
 <section id="tab-add" class="hidden">
 <div class="card">
+<div style="margin-bottom:12px">
+  <button type="button" class="secondary" onclick="goBackFromAddEdit()">← Back</button>
+</div>
 <h3 id="formTitle">Add Tower</h3>
 <div id="unknownScanBanner" class="notice hidden" style="margin-bottom:10px"></div>
 <div id="unknownScanActions" class="hidden" style="margin-bottom:12px">
@@ -512,7 +515,7 @@ Map pin colors:
 <div id="idAutofillStatus" class="small muted" style="margin:8px 0"></div>
 <div id="formMath" class="small muted" style="margin:10px 0"></div>
 <div class="row">
-<button class="good" onclick="saveRecord()">Save Tower</button>
+<button id="saveTowerBtn" class="good" onclick="saveRecordOnce()">Save Tower</button>
 <button class="secondary" onclick="clearForm()">Clear</button>
 </div>
 <div id="duplicateWarn" style="margin-top:10px"></div>
@@ -526,11 +529,28 @@ Map pin colors:
 let BUILTIN=null, DB=null;
 const PLMNS={"T-Mobile":"310260","T-Mobile Starlink":"310830","STRATA Networks":"312290","AT&T":"310410","Verizon":"311480","Union Wireless":"310020"};
 
+let currentAppTab='lookup';
+let previousAppTab='lookup';
+
 function showTab(name,btn){
+ if(name!==currentAppTab){
+   previousAppTab=currentAppTab;
+   currentAppTab=name;
+ }
  document.querySelectorAll('section[id^="tab-"]').forEach(x=>x.classList.add('hidden'));
  document.getElementById('tab-'+name).classList.remove('hidden');
- document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); btn.classList.add('active');
+ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+ if(btn)btn.classList.add('active');
  if(name==='registry') renderRegistry();
+}
+
+function goBackFromAddEdit(){
+ const target=(previousAppTab && previousAppTab!=='add') ? previousAppTab : 'lookup';
+ const btn=[...document.querySelectorAll('.tab')].find(b=>{
+   const oc=b.getAttribute('onclick')||'';
+   return oc.includes(`showTab('${target}'`);
+ });
+ showTab(target,btn||document.querySelector('.tab'));
 }
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
@@ -2296,6 +2316,8 @@ function calcFormReverse(){
  }catch(e){}
 }
 function clearForm(){
+ resetSaveTowerButton();
+
  ['editKey','fId','fSite','fBands','fBandwidth','fCell','fLocal','fPci','fTac','fLat','fLon','fNotes'].forEach(id=>document.getElementById(id).value='');
  document.getElementById('fCarrier').value='';document.getElementById('fPlmn').dataset.auto='0';document.getElementById('fStatus').value='confirmed';document.getElementById('fRadio').value='LTE';document.getElementById('formTitle').textContent='Add Tower';document.getElementById('duplicateWarn').innerHTML='';const usb=document.getElementById('unknownScanBanner');if(usb){usb.classList.add('hidden');usb.innerHTML='';}const usa=document.getElementById('unknownScanActions');if(usa)usa.classList.add('hidden');if(document.getElementById('idAutofillStatus'))document.getElementById('idAutofillStatus').textContent='';syncPlmn();updateIdLabel();
 
@@ -2370,17 +2392,68 @@ function autofillTowerById(){
 }
 
 
-function saveRecord(){
+
+let saveTowerInProgress=false;
+
+function resetSaveTowerButton(){
+ const btn=document.getElementById('saveTowerBtn');
+ saveTowerInProgress=false;
+ if(btn){
+   btn.disabled=false;
+   btn.textContent='Save Tower';
+   btn.removeAttribute('aria-busy');
+ }
+}
+
+function saveRecordOnce(){
+ const btn=document.getElementById('saveTowerBtn');
+
+ // Ignore accidental second taps while the first save is processing.
+ if(saveTowerInProgress)return false;
+ saveTowerInProgress=true;
+
+ if(btn){
+   btn.disabled=true;
+   btn.textContent='✓ Saving…';
+   btn.setAttribute('aria-busy','true');
+ }
+
+ const warn=document.getElementById('duplicateWarn');
+ if(warn)warn.innerHTML='';
+
+ let ok=false;
+ try{
+   ok=coreSaveRecord()===true;
+ }catch(err){
+   console.error(err);
+   toast('Save failed. Please try again.');
+ }
+
+ if(ok){
+   if(btn){
+     btn.textContent='✓ Saved';
+     btn.removeAttribute('aria-busy');
+   }
+   // Keep it locked long enough to swallow a fast second tap.
+   setTimeout(resetSaveTowerButton,1400);
+   return true;
+ }
+
+ resetSaveTowerButton();
+ return false;
+}
+
+function coreSaveRecord(){
  const isNewRecord=!document.getElementById('editKey').value.trim();
- if(!DB)return;
+ if(!DB)return false;
  const carrier=document.getElementById('fCarrier').value,radio=document.getElementById('fRadio').value,id=document.getElementById('fId').value.trim(),site=document.getElementById('fSite').value.trim();
- if(!id||!site){toast('Tower ID and site name are required.');return}
+ if(!id||!site){toast('Tower ID and site name are required.');return false}
  const oldKey=document.getElementById('editKey').value;
  const newKey=`${carrier}|${radio}|${id}`;
  const existingIndex=DB.records.findIndex(r=>keyOf(r)===newKey);
  if(existingIndex>=0 && newKey!==oldKey){
    document.getElementById('duplicateWarn').innerHTML='<div class="notice"><b>Duplicate blocked.</b> That carrier + radio + ID already exists. Edit the existing record instead.</div>';
-   return;
+   return false;
  }
  const plmnValue=document.getElementById('fPlmn').value.trim();
  if(plmnValue){
@@ -2436,6 +2509,8 @@ function saveRecord(){
      }
    }
  },0);
+
+ return true;
 }
 function editRecord(k){
  let r=DB.records.find(x=>keyOf(x)===k);if(!r)return;r=getEffectiveRecord(r);
@@ -3293,8 +3368,15 @@ function extractScanFieldsSpatial(ocrData){
    if(radio==='5G'&&!/^n/i.test(band))band='n'+band.replace(/^[Bb]/,'');
    if(radio==='LTE'&&!/^B/i.test(band))band='B'+band.replace(/^[Nn]/,'');
    if(/^N/.test(band))band='n'+band.slice(1);
+
+   // n71 is never valid in this project. In these screenshots it is an OCR
+   // misread of n71 where the 7 was dropped.
+   if(/^n71$/i.test(band)) band='n71';
+
+   // Do not invent unsupported 5G bands from OCR noise.
+   if(radio==='5G' && !/^n(?:2|25|41|66|71|77)$/i.test(band)) band='';
  }
- if(/^n(?:25|41|71)$/i.test(band)) radio='5G';
+ if(/^n(?:2|25|41|66|71|77)$/i.test(band)) radio='5G';
  if(/^B/i.test(band)) radio='LTE';
 
  // Retry Cell Id after radio correction. The diagnostic UI uses a long NCI for 5G.
@@ -3734,7 +3816,7 @@ function saveUnknownScannedTower(){
  );
  if(duplicate){alert('That carrier + radio + tower ID is already in the registry.');return;}
 
- saveRecord();
+ saveRecordOnce();
 
  const saved=DB.records.find(r =>
    String(r.eNB||r.gNB||'')===String(id) &&
@@ -4010,7 +4092,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='WORK-NO-CELLMAPPER-NO-BACKUP-v1';
+  const BUILD='WORK-NO-CELLMAPPER-NO-BACKUP-N77-v5';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

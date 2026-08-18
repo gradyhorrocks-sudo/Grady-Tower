@@ -277,8 +277,11 @@ if('serviceWorker' in navigator){
 <button class="tab" onclick="showTab('registry',this)">Registry</button>
 <button class="tab" onclick="showTab('map',this)">Map</button>
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
-<button class="tab" onclick="openBackupWithPin(this)">Backup</button>
 </div>
+<div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
+  <b>WORK BRANCH:</b> CellMapper and Backup removed.
+</div>
+
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
   <div class="row" style="align-items:center">
     <div style="flex:2">
@@ -339,78 +342,7 @@ if('serviceWorker' in navigator){
 <div id="universalLookupOut" style="margin-top:12px"></div>
 </div>
 
-<div class="card" style="margin-top:16px">
-<h2>CellMapper Tower Lookup</h2>
-<div class="small muted">
-Enter the carrier, network type, and eNB/gNB. The app builds the correct CellMapper map for that carrier.
-Use 4G LTE for eNB searches, 3G UMTS for NodeB searches, and 5G NR for gNB searches.
-</div>
-<div class="notice small" style="margin-top:10px">
-If a scanned tower is not already in your Registry, the app will simply ask whether you want to add it.
-</div>
 
-
-<div class="grid" style="margin-top:10px">
-<div>
-<label>Carrier</label>
-<select id="cmCarrier" onchange="syncCellMapperPlmn()">
-<option value="STRATA Networks">STRATA Networks</option>
-<option value="T-Mobile">T-Mobile</option>
-<option value="AT&T">AT&T</option>
-<option value="Verizon">Verizon</option>
-<option value="Union Wireless">Union Wireless</option>
-<option value="T-Mobile Starlink">T-Mobile Starlink</option>
-<option value="custom">Other / Future Carrier</option>
-</select>
-</div>
-
-<div>
-<label>PLMN</label>
-<input id="cmPlmn" inputmode="numeric" value="312290" placeholder="312290">
-</div>
-
-<div>
-<label>Network</label>
-<select id="cmRadio">
-<option value="LTE">4G LTE</option>
-<option value="UMTS">3G UMTS</option>
-<option value="NR">5G NR</option>
-</select>
-</div>
-
-<div>
-<label>eNB / gNB</label>
-<input id="cmTowerId" inputmode="numeric" placeholder="1038">
-</div>
-</div>
-
-<div class="row" style="margin-top:10px">
-<button type="button" onclick="openCellMapperTowerSearch()">Open CellMapper</button>
-<button type="button" class="secondary" onclick="previewCellMapperSearch()">Preview Search</button>
-</div>
-
-<div id="cmSearchPreview" style="margin-top:10px"></div>
-<div class="card" style="margin-top:12px">
-<h3>CellMapper Verified Autofill</h3>
-<div class="small muted">
-Tower Registry can check CellMapper in the background using the selected carrier, LTE/3G/5G, and tower ID. Green verified towers can automatically fill the tower ID and coordinates into Add/Edit.
-</div>
-<div class="row" style="margin-top:8px">
-<button type="button" onclick="runBackgroundCellMapperLookup()">Run Background Lookup</button>
-<button type="button" class="secondary" onclick="fillBackgroundCellMapperIntoForm()">Fill Add/Edit</button>
-</div>
-
-<div class="notice small" style="margin-top:8px">
-  <b>CellMapper status:</b> Green = Verified, red = Unverified, and no matching tower = Not in CellMapper.
-</div>
-
-<div id="cmBackgroundStatus" class="small muted" style="margin-top:8px"></div>
-<div id="cmBackgroundResult" style="margin-top:8px"></div>
-</div>
-
-
-
-</div>
 </section>
 
 <section id="tab-scan" class="hidden">
@@ -584,35 +516,6 @@ Map pin colors:
 <button class="secondary" onclick="clearForm()">Clear</button>
 </div>
 <div id="duplicateWarn" style="margin-top:10px"></div>
-</div>
-</section>
-
-<section id="tab-backup" class="hidden">
-<div class="card backup-compact">
-  <div class="backup-head">
-    <div>
-      <h3>Backup</h3>
-      <div class="small muted">Export, import, reset, or configure the CellMapper backend.</div>
-    </div>
-  </div>
-
-  <div class="backup-actions">
-    <button onclick="exportRegistry()">Export JSON</button>
-    <button class="secondary" onclick="document.getElementById('importFile').click()">Import JSON</button>
-    <input id="importFile" type="file" accept=".json,application/json" class="hidden" onchange="importRegistry(event)">
-    <button class="danger" onclick="resetRegistry()">Reset Registry</button>
-  </div>
-
-  <details class="backup-backend">
-    <summary><b>CellMapper Backend</b></summary>
-    <div class="small muted" style="margin:6px 0">Saved only on this device.</div>
-    <input id="remoteBackendUrl" placeholder="https://your-backend-site.netlify.app">
-    <div class="backup-actions" style="margin-top:6px">
-      <button type="button" onclick="saveRemoteBackendUrl()">Save URL</button>
-      <button type="button" class="secondary" onclick="testRemoteBackend()">Check Backend</button>
-    </div>
-    <div id="remoteBackendStatus" class="small muted" style="margin-top:5px"></div>
-  </details>
 </div>
 </section>
 </div>
@@ -1231,24 +1134,25 @@ fetch('registry.json').then(r=>r.json()).then(j=>{
 function signalRating(kind,v){
  if(v===''||v===null||Number.isNaN(Number(v))) return ['Unknown','⚪'];
  v=Number(v);
- // Exact four-level thresholds from the user's RF Connectivity chart.
+ // PowerfulSignal reference thresholds requested by the user.
  if(kind==='rsrp'){
-   if(v>=-80)return ['Excellent','🟢'];
-   if(v>-90)return ['Good','🟡'];
-   if(v>-100)return ['Medium','🟠'];
-   return ['Weak','🔴'];
+   if(v>=-89)return ['Excellent','🟢'];
+   if(v>=-104)return ['Good','🟡'];
+   if(v>=-114)return ['Fair','🟠'];
+   if(v>=-124)return ['Poor','🔴'];
+   return ['No Signal','⚫'];
  }
  if(kind==='rsrq'){
-   if(v>=-10)return ['Excellent','🟢'];
-   if(v>-15)return ['Good','🟡'];
-   if(v>-20)return ['Medium','🟠'];
-   return ['Weak','🔴'];
+   if(v>=-9)return ['Excellent','🟢'];
+   if(v>=-14)return ['Good','🟡'];
+   if(v>=-19)return ['Fair','🟠'];
+   return ['Poor','🔴'];
  }
  if(kind==='snr'){
-   if(v>=20)return ['Excellent','🟢'];
-   if(v>=13)return ['Good','🟡'];
-   if(v>0)return ['Medium','🟠'];
-   return ['Weak','🔴'];
+   if(v>=11)return ['Excellent','🟢'];
+   if(v>=6)return ['Good','🟡'];
+   if(v>=0)return ['Fair','🟠'];
+   return ['Poor','🔴'];
  }
  return ['Unknown','⚪'];
 }
@@ -2329,9 +2233,9 @@ function lookup(){
  <div class="scan-experience" style="margin:10px 0 2px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#0f172a">
  <div style="font-weight:800;margin-bottom:4px">Expected experience</div>
  <div class="small" style="line-height:1.5">
-  <div><b>📞 Calls:</b> ${overall==='Excellent'?'Clear and stable.':overall==='Good'?'Clear and generally stable.':overall==='Fair'?'Should work; brief audio issues possible.':overall==='Poor'?'May sound choppy or briefly cut out.':overall==='Very Poor'?'May break up, sound robotic, or drop.':'Not enough signal data.'}</div>
-  <div><b>🎬 Video:</b> ${overall==='Excellent'?'HD should stream smoothly.':overall==='Good'?'Should stream smoothly with little buffering.':overall==='Fair'?'May reduce quality or buffer occasionally.':overall==='Poor'?'Expect buffering and lower quality.':overall==='Very Poor'?'Frequent buffering and major quality drops likely.':'Not enough signal data.'}</div>
-  <div><b>🌐 Data:</b> ${overall==='Excellent'?'Fast, responsive, and consistent.':overall==='Good'?'Reliable speeds and responsive browsing.':overall==='Fair'?'Usable, but speeds may vary.':overall==='Poor'?'Slower, inconsistent speeds and more lag.':overall==='Very Poor'?'May be very slow, unstable, or unusable.':'Not enough signal data.'}</div>
+  <div><b>📞 Calls:</b> ${overall==='Excellent'?'Clear and stable.':overall==='Good'?'Clear and generally stable.':overall==='Fair'?'Should generally work, though stability may be reduced.':overall==='Poor'?'May become less stable as conditions worsen.':overall==='No Signal'?'The radio link is effectively unusable.':'Not enough signal data.'}</div>
+  <div><b>🎬 Video:</b> ${overall==='Excellent'?'HD should stream smoothly.':overall==='Good'?'Should stream smoothly with little buffering.':overall==='Fair'?'May reduce quality or buffer occasionally.':overall==='Poor'?'Expect buffering and lower quality.':overall==='No Signal'?'Streaming is not expected to work.':'Not enough signal data.'}</div>
+  <div><b>🌐 Data:</b> ${overall==='Excellent'?'Fast, responsive, and consistent.':overall==='Good'?'Reliable speeds and responsive browsing.':overall==='Fair'?'Usable, but speeds may vary.':overall==='Poor'?'Slower, inconsistent speeds and more lag.':overall==='No Signal'?'Data service is not expected to be usable.':'Not enough signal data.'}</div>
  </div>
 </div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math||'Enter Cell ID/NCI to calculate')}</div>
@@ -2847,9 +2751,9 @@ function scanMetricExperience(kind, grade){
    'Very Good':'Strong received power. Coverage should be dependable with only minor weakening through buildings or terrain.',
    'Good':'Healthy received power. Everyday service should be reliable, though deeper indoor areas may begin reducing speed or stability.',
    'Moderate':'Usable received power with less margin. Indoor obstacles, terrain, or movement can cause more band/site changes and variable speeds.',
-   'Medium':'Weakening received power. Calls can become less robust and data may slow or fluctuate, especially indoors or near the cell edge.',
-   'Weak':'Weak received power. Expect reduced reliability, slower data, more handoffs/reselections, and a higher chance of call or session interruption.',
-   'Very Weak':'Marginal received power. Maintaining the radio link itself may be difficult, causing severe data slowdown, stalls, call breakup, or loss of service.'
+   'Fair':'Weakening received power. Calls can become less robust and data may slow or fluctuate, especially indoors or near the cell edge.',
+   'Poor':'Weak received power. Expect reduced reliability, slower data, more handoffs/reselections, and a higher chance of call or session interruption.',
+   'No Signal':'Marginal received power. Maintaining the radio link itself may be difficult, causing severe data slowdown, stalls, call breakup, or loss of service.'
   },
   rsrq:{
    'Exceptional':'Exceptionally clean radio conditions with very little apparent interference or loading. Sessions should remain highly consistent.',
@@ -2857,8 +2761,8 @@ function scanMetricExperience(kind, grade){
    'Very Good':'Clean signal quality. Only small efficiency losses are expected from interference or network loading.',
    'Good':'Healthy signal quality. Normal loading or interference may trim peak performance but should not seriously disrupt sessions.',
    'Moderate':'Noticeable interference or loading. Calls should usually remain usable, while data speed and latency may vary as conditions change.',
-   'Medium':'Degraded signal quality. Retransmissions and scheduling inefficiency can produce inconsistent data, extra latency, and occasional media hiccups.',
-   'Weak':'Heavy interference or loading. Expect unstable throughput, higher latency, more retransmissions, and possible call or session quality problems.',
+   'Fair':'Degraded signal quality. Retransmissions and scheduling inefficiency can produce inconsistent data, extra latency, and occasional media hiccups.',
+   'Poor':'Heavy interference or loading. Expect unstable throughput, higher latency, more retransmissions, and possible call or session quality problems.',
    'Very Weak':'Severely degraded quality. Even with decent signal strength, interference/loading can make calls unreliable and data sessions slow or unstable.'
   },
   sinr:{
@@ -2867,8 +2771,8 @@ function scanMetricExperience(kind, grade){
    'Very Good':'Very clean signal. Calls and video should be stable and data should remain fast with little interference-related loss.',
    'Good':'Good clarity with some interference present. Normal calls, streaming, and data should work well, though peak throughput may be slightly reduced.',
    'Moderate':'Moderate clarity. The modem may step down modulation, causing lower peak speeds and occasional latency or video-quality changes.',
-   'Medium':'Limited signal clarity. More retransmissions and conservative modulation can cause slower data, buffering, and less consistent call quality.',
-   'Weak':'Interference/noise is close to the wanted signal. Expect substantial speed loss, latency, buffering, and possible rough or unstable calls.',
+   'Fair':'Limited signal clarity. More retransmissions and conservative modulation can cause slower data, buffering, and less consistent call quality.',
+   'Poor':'Interference/noise is close to the wanted signal. Expect substantial speed loss, latency, buffering, and possible rough or unstable calls.',
    'Very Weak':'Noise/interference rivals or exceeds the useful signal. Data can become extremely slow or stall and real-time sessions may break up or fail.'
   }
  };
@@ -3097,11 +3001,14 @@ function identifyFromScan(fields){
  if(vals.length){
    // Combine the available measurements instead of letting one weak metric
    // automatically force the entire connection to the worst category.
-   const rank={'Weak':0,'Medium':1,'Good':2,'Excellent':3};
-   const avg=vals.reduce((sum,x)=>sum+(rank[x[0]]??0),0)/vals.length;
-   const score=Math.max(0,Math.min(3,Math.round(avg)));
-   overall=['Weak','Medium','Good','Excellent'][score];
-   icon=['🔴','🟠','🟡','🟢'][score];
+   const rank={'No Signal':0,'Poor':1,'Fair':2,'Good':3,'Excellent':4};
+   const rated=vals.filter(x=>Object.prototype.hasOwnProperty.call(rank,x[0]));
+   if(rated.length){
+     const avg=rated.reduce((sum,x)=>sum+rank[x[0]],0)/rated.length;
+     const score=Math.max(0,Math.min(4,Math.round(avg)));
+     overall=['No Signal','Poor','Fair','Good','Excellent'][score];
+     icon=['⚫','🔴','🟠','🟡','🟢'][score];
+   }
  }
 
  // v83: build the three experience descriptions directly inside identifyFromScan.
@@ -3115,14 +3022,18 @@ function identifyFromScan(fields){
    callsText='Good. Calls should be clear and generally stable.';
    videoText='Good. Streaming should be smooth with little buffering.';
    dataText='Good. Expect reliable speeds and responsive browsing.';
- }else if(overall==='Medium'){
-   callsText='Medium. Calls should usually work, but weak radio conditions can cause brief audio issues or instability.';
-   videoText='Medium. Video should work, but quality may change or buffer when conditions worsen.';
-   dataText='Medium. Data should be usable, though speeds and latency may vary.';
- }else if(overall==='Weak'){
-   callsText='Weak. Calls may become choppy, robotic, unstable, or drop.';
-   videoText='Weak. Expect lower quality, buffering, or stalls.';
-   dataText='Weak. Data may be slow, inconsistent, or temporarily unusable.';
+ }else if(overall==='Fair'){
+   callsText='Fair. Calls should generally work, though weaker radio conditions can reduce stability.';
+   videoText='Fair. Video should work, but quality may change or buffer when conditions worsen.';
+   dataText='Fair. Data should be usable, though speeds and latency may vary.';
+ }else if(overall==='Poor'){
+   callsText='Poor. Calls may become less stable, especially with movement or worsening interference.';
+   videoText='Poor. Expect lower quality, buffering, or stalls.';
+   dataText='Poor. Data may be slow, inconsistent, or temporarily unusable.';
+ }else if(overall==='No Signal'){
+   callsText='No Signal. The radio link is effectively unusable.';
+   videoText='No Signal. Streaming is not expected to work.';
+   dataText='No Signal. Data service is not expected to be usable.';
  }else{
    callsText='Unknown. Not enough signal data to estimate call quality.';
    videoText='Unknown. Not enough signal data to estimate streaming quality.';
@@ -3178,9 +3089,9 @@ function identifyFromScan(fields){
  <div class="scan-experience" style="margin:10px 0 2px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#0f172a">
  <div style="font-weight:800;margin-bottom:4px">Expected experience</div>
  <div class="small" style="line-height:1.5">
-  <div><b>📞 Calls:</b> ${overall==='Excellent'?'Clear and stable.':overall==='Good'?'Clear and generally stable.':overall==='Fair'?'Should work; brief audio issues possible.':overall==='Poor'?'May sound choppy or briefly cut out.':overall==='Very Poor'?'May break up, sound robotic, or drop.':'Not enough signal data.'}</div>
-  <div><b>🎬 Video:</b> ${overall==='Excellent'?'HD should stream smoothly.':overall==='Good'?'Should stream smoothly with little buffering.':overall==='Fair'?'May reduce quality or buffer occasionally.':overall==='Poor'?'Expect buffering and lower quality.':overall==='Very Poor'?'Frequent buffering and major quality drops likely.':'Not enough signal data.'}</div>
-  <div><b>🌐 Data:</b> ${overall==='Excellent'?'Fast, responsive, and consistent.':overall==='Good'?'Reliable speeds and responsive browsing.':overall==='Fair'?'Usable, but speeds may vary.':overall==='Poor'?'Slower, inconsistent speeds and more lag.':overall==='Very Poor'?'May be very slow, unstable, or unusable.':'Not enough signal data.'}</div>
+  <div><b>📞 Calls:</b> ${overall==='Excellent'?'Clear and stable.':overall==='Good'?'Clear and generally stable.':overall==='Fair'?'Should generally work, though stability may be reduced.':overall==='Poor'?'May become less stable as conditions worsen.':overall==='No Signal'?'The radio link is effectively unusable.':'Not enough signal data.'}</div>
+  <div><b>🎬 Video:</b> ${overall==='Excellent'?'HD should stream smoothly.':overall==='Good'?'Should stream smoothly with little buffering.':overall==='Fair'?'May reduce quality or buffer occasionally.':overall==='Poor'?'Expect buffering and lower quality.':overall==='No Signal'?'Streaming is not expected to work.':'Not enough signal data.'}</div>
+  <div><b>🌐 Data:</b> ${overall==='Excellent'?'Fast, responsive, and consistent.':overall==='Good'?'Reliable speeds and responsive browsing.':overall==='Fair'?'Usable, but speeds may vary.':overall==='Poor'?'Slower, inconsistent speeds and more lag.':overall==='No Signal'?'Data service is not expected to be usable.':'Not enough signal data.'}</div>
  </div>
 </div>
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
@@ -3504,9 +3415,39 @@ function identifyFromScan(fields){
    if(!plmn)missing.push('PLMN');
    if(!raw)missing.push('Cell ID/NCI');
    if(raw&&!sid)missing.push(radio==='LTE'?'eNB':'gNB');
-   document.getElementById('scanIdentity').innerHTML=
-     `<div class="notice"><b>Scan not identified yet.</b> Missing ${esc(missing.join(', '))}. `+
-     `The app will not substitute TAC, PCI, or another number for Cell ID/NCI.</div>`;
+
+   // Identifier failure must NOT suppress signal analysis. RSRP/RSRQ/SINR are
+   // useful on their own, so still show connection quality and expected experience.
+   const rr=signalRating('rsrp',fields.rsrp),rq=signalRating('rsrq',fields.rsrq),sr=signalRating('snr',fields.snr);
+   const vals=[]; if(fields.rsrp)vals.push(rr); if(fields.rsrq)vals.push(rq); if(fields.snr)vals.push(sr);
+   let overall='Unknown',icon='⚪';
+   if(vals.length){
+     const rank={'Weak':0,'Medium':1,'Good':2,'Excellent':3};
+     const avg=vals.reduce((sum,x)=>sum+(rank[x[0]]??0),0)/vals.length;
+     const score=Math.max(0,Math.min(3,Math.round(avg)));
+     overall=['Weak','Medium','Good','Excellent'][score];
+     icon=['🔴','🟠','🟡','🟢'][score];
+   }
+   const exp={
+     Excellent:['Excellent. Calls should sound clear and stay stable.','Excellent. HD video should stream smoothly.','Excellent. Expect fast, responsive, consistent data.'],
+     Good:['Good. Calls should be clear and generally stable.','Good. Streaming should be smooth with little buffering.','Good. Expect reliable speeds and responsive browsing.'],
+     Medium:['Medium. Calls should usually work, but interference or weaker radio conditions can cause brief audio issues.','Medium. Video should work, but quality may change or buffer when conditions worsen.','Medium. Data should be usable, though speeds and latency may vary.'],
+     Weak:['Weak. Calls may become choppy, robotic, unstable, or drop.','Weak. Expect lower quality, buffering, or stalls.','Weak. Data may be slow, inconsistent, or temporarily unusable.'],
+     Unknown:['Unknown. Not enough signal data to estimate call quality.','Unknown. Not enough signal data to estimate streaming quality.','Unknown. Not enough signal data to estimate data performance.']
+   }[overall];
+
+   document.getElementById('scanIdentity').innerHTML=`<div class="card result unknown">
+    <h2>Signal Quality — Tower ID Incomplete</h2>
+    <div class="small muted" style="margin-bottom:10px">Missing ${esc(missing.join(', '))}. Tower identification is incomplete, but the measured radio quality can still be analyzed.</div>
+    <div style="margin-top:8px"><b>Signal: ${icon} ${overall}</b></div>
+    <div class="scan-metric-breakdown" style="margin-top:10px;display:grid;gap:8px">
+      <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>RSRP — Signal Strength</b><div class="small" style="margin-top:3px">${fields.rsrp?`${rr[1]} <b>${esc(rr[0])}: ${esc(fields.rsrp)} dBm</b><br>Measures how strongly the tower’s signal reaches your phone.<br><b>Effect:</b> ${esc(scanMetricExperience('rsrp',rr[0]))}`:'⚪ <b>Unknown</b><br>Signal strength could not be measured from this scan.'}</div></div>
+      <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>RSRQ — Signal Quality / Congestion</b><div class="small" style="margin-top:3px">${fields.rsrq?`${rq[1]} <b>${esc(rq[0])}: ${esc(fields.rsrq)} dB</b><br>Measures signal quality, interference, and network loading.<br><b>Effect:</b> ${esc(scanMetricExperience('rsrq',rq[0]))}`:'⚪ <b>Unknown</b><br>Interference or congestion impact cannot be determined.'}</div></div>
+      <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>SNR/SINR — Signal Clarity</b><div class="small" style="margin-top:3px">${fields.snr?`${sr[1]} <b>${esc(sr[0])}: ${esc(fields.snr)} dB</b><br>Measures how much stronger the useful signal is than interference and noise.<br><b>Effect:</b> ${esc(scanMetricExperience('sinr',sr[0]))}`:'⚪ <b>Unknown</b><br>Signal clarity could not be measured from this scan.'}</div></div>
+    </div>
+    <div class="notice scan-experience" style="margin-top:10px;padding:10px 12px"><b>Overall Expected Experience</b><div class="small" style="margin-top:5px;line-height:1.5"><div><b>📞 Calls:</b> ${esc(exp[0])}</div><div><b>🎬 Video:</b> ${esc(exp[1])}</div><div><b>🌐 Data:</b> ${esc(exp[2])}</div></div></div>
+    <div class="notice" style="margin-top:10px"><b>Tower not identified yet.</b> The app will not substitute TAC, PCI, or another number for Cell ID/NCI.</div>
+   </div>`;
    return;
  }
 
@@ -3531,11 +3472,14 @@ function identifyFromScan(fields){
  if(vals.length){
    // Combine the available measurements instead of letting one weak metric
    // automatically force the entire connection to the worst category.
-   const rank={'Weak':0,'Medium':1,'Good':2,'Excellent':3};
-   const avg=vals.reduce((sum,x)=>sum+(rank[x[0]]??0),0)/vals.length;
-   const score=Math.max(0,Math.min(3,Math.round(avg)));
-   overall=['Weak','Medium','Good','Excellent'][score];
-   icon=['🔴','🟠','🟡','🟢'][score];
+   const rank={'No Signal':0,'Poor':1,'Fair':2,'Good':3,'Excellent':4};
+   const rated=vals.filter(x=>Object.prototype.hasOwnProperty.call(rank,x[0]));
+   if(rated.length){
+     const avg=rated.reduce((sum,x)=>sum+rank[x[0]],0)/rated.length;
+     const score=Math.max(0,Math.min(4,Math.round(avg)));
+     overall=['No Signal','Poor','Fair','Good','Excellent'][score];
+     icon=['⚫','🔴','🟠','🟡','🟢'][score];
+   }
  }
 
  let callsText='',videoText='',dataText='';
@@ -3547,14 +3491,18 @@ function identifyFromScan(fields){
    callsText='Good. Calls should be clear and generally stable.';
    videoText='Good. Streaming should be smooth with little buffering.';
    dataText='Good. Expect reliable speeds and responsive browsing.';
- }else if(overall==='Medium'){
-   callsText='Medium. Calls should usually work, but weak radio conditions can cause brief audio issues or instability.';
-   videoText='Medium. Video should work, but quality may change or buffer when conditions worsen.';
-   dataText='Medium. Data should be usable, though speeds and latency may vary.';
- }else if(overall==='Weak'){
-   callsText='Weak. Calls may become choppy, robotic, unstable, or drop.';
-   videoText='Weak. Expect lower quality, buffering, or stalls.';
-   dataText='Weak. Data may be slow, inconsistent, or temporarily unusable.';
+ }else if(overall==='Fair'){
+   callsText='Fair. Calls should generally work, though weaker radio conditions can reduce stability.';
+   videoText='Fair. Video should work, but quality may change or buffer when conditions worsen.';
+   dataText='Fair. Data should be usable, though speeds and latency may vary.';
+ }else if(overall==='Poor'){
+   callsText='Poor. Calls may become less stable, especially with movement or worsening interference.';
+   videoText='Poor. Expect lower quality, buffering, or stalls.';
+   dataText='Poor. Data may be slow, inconsistent, or temporarily unusable.';
+ }else if(overall==='No Signal'){
+   callsText='No Signal. The radio link is effectively unusable.';
+   videoText='No Signal. Streaming is not expected to work.';
+   dataText='No Signal. Data service is not expected to be usable.';
  }else{
    callsText='Unknown. Not enough signal data to estimate call quality.';
    videoText='Unknown. Not enough signal data to estimate streaming quality.';
@@ -4062,7 +4010,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='v83-HARD-FIX-EXPERIENCE-2201';
+  const BUILD='WORK-NO-CELLMAPPER-NO-BACKUP-v1';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -4120,6 +4068,16 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 
 
+
+
+<script>
+/* STRIPPED WORK BRANCH: CellMapper and Backup intentionally disabled. */
+function openBackupWithPin(){ return false; }
+function openCellMapperTowerSearch(){ return false; }
+function previewCellMapperSearch(){ return false; }
+function runBackgroundCellMapperLookup(){ return false; }
+function fillBackgroundCellMapperIntoForm(){ return false; }
+</script>
 
 </body>
 </html>

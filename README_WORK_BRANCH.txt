@@ -1,0 +1,22 @@
+Master Cellular Tower Registry - Work Branch
+
+Derived from the current full v91 frontend.
+
+Removed from this branch:
+- CellMapper Lookup UI
+- CellMapper background/verified autofill UI
+- Backup tab
+- Backup page UI
+- Direct CellMapper/Backup entry points are disabled
+
+Preserved:
+- Lookup
+- Scan and OCR
+- Registry
+- Map
+- Add/Edit
+- Current signal grading/experience behavior
+- Existing registry data/assets
+
+The full v91 frontend remains the authoritative full build.
+Backend remains v67.

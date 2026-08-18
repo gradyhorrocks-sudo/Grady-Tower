@@ -1540,11 +1540,11 @@
       "carrier": "AT&T",
       "radio": "LTE",
       "site": "US40/SR208/SR35 Utah ?",
-      "eNB": "4560067",
+      "eNB": "456067",
       "bands": "B12 B66",
       "bandwidth": "",
       "status": "provisional",
-      "notes": "ID flagged for verification; may have been intended as 456067"
+      "notes": "Map-derived site name; eNB and bands visible in AT&T LTE CellMapper screenshot. Waiting for user confirmation."
     },
     {
       "carrier": "AT&T",
@@ -1775,6 +1775,226 @@
       "bandwidth": "",
       "status": "confirmed",
       "notes": ""
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Strawberry Reservoir West Utah ?",
+      "eNB": "455370",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Strawberry Reservoir Utah ?",
+      "eNB": "450003",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Strawberry Southwest Utah ?",
+      "eNB": "454052",
+      "bands": "B2 B12 B17",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Strawberry South Utah ?",
+      "eNB": "450136",
+      "bands": "B2 B12 B14",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "US-40 West Duchesne Utah ?",
+      "eNB": "455051",
+      "bands": "B2 B12 B14 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Duchesne West Utah ?",
+      "eNB": "456093",
+      "bands": "B2 B12 B14 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Myton West Utah ?",
+      "eNB": "450439",
+      "bands": "B2 B12 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Bridgeland Mountain",
+      "eNB": "456065",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "confirmed",
+      "notes": "User-confirmed site name."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Nine Mile / South Myton Utah ?",
+      "eNB": "456066",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Ouray / South Uintah Basin Utah ?",
+      "eNB": "450013",
+      "bands": "B2 B12 B14",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Nine Mile South Utah ?",
+      "eNB": "450586",
+      "bands": "B2 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Southwest Uintah Basin Utah ?",
+      "eNB": "456021",
+      "bands": "B2 B12 B14",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Vernal West Utah ?",
+      "eNB": "455306",
+      "bands": "B2 B12 B14 B30 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Vernal East Utah ?",
+      "eNB": "450328",
+      "bands": "B2 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Jensen West Utah ?",
+      "eNB": "456072",
+      "bands": "B12 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Diamond Mountain / Utah-Colorado Border Utah ?",
+      "eNB": "456088",
+      "bands": "B2 B17 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Northwest Colorado ?",
+      "eNB": "384467",
+      "bands": "B2 B12",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Dinosaur North Colorado ?",
+      "eNB": "384466",
+      "bands": "B2 B12 B14",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Dinosaur East Colorado ?",
+      "eNB": "384465",
+      "bands": "B2 B12 B14 B17",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Rangely Colorado ?",
+      "eNB": "384462",
+      "bands": "B12 B14 B17 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Rangely East Colorado ?",
+      "eNB": "384464",
+      "bands": "B12 B14 B17 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
+    },
+    {
+      "carrier": "AT&T",
+      "radio": "LTE",
+      "site": "Rangely South Colorado ?",
+      "eNB": "384461",
+      "bands": "B12 B14 B17 B66",
+      "bandwidth": "",
+      "status": "provisional",
+      "notes": "Map-derived site name from supplied AT&T LTE CellMapper screenshot; waiting for user confirmation."
     }
   ]
 }

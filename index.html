@@ -279,7 +279,7 @@ if('serviceWorker' in navigator){
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
-  <b>CURRENT 4:</b> CellMapper and Backup removed.
+  <b>CURRENT 5:</b> CellMapper and Backup removed.
 </div>
 
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
@@ -346,6 +346,30 @@ if('serviceWorker' in navigator){
 </section>
 
 <section id="tab-scan" class="hidden">
+
+<div class="card" id="manualSignalCard">
+<h3>Manual Signal Analyzer</h3>
+<p class="muted small">Use this when someone texts you signal values. No screenshot, Cell ID, or tower information is required.</p>
+
+<label for="manualSignalText">Paste the text you received</label>
+<textarea id="manualSignalText" style="min-height:96px" placeholder="RSRP: -111&#10;RSRQ: -9&#10;SNR/SINR: 3.2"></textarea>
+
+<div class="grid" style="margin-top:12px">
+  <div><label for="manualRsrp">RSRP</label><input id="manualRsrp" inputmode="decimal" placeholder="-111"></div>
+  <div><label for="manualRsrq">RSRQ</label><input id="manualRsrq" inputmode="decimal" placeholder="-9"></div>
+  <div><label for="manualSnr">SNR / SINR</label><input id="manualSnr" inputmode="decimal" placeholder="3.2"></div>
+</div>
+
+<div class="small muted" style="margin-top:8px">You can also enter several readings separated by spaces or commas. The analyzer uses the average.</div>
+
+<div class="row" style="margin-top:12px">
+  <button type="button" id="manualSignalAnalyzeBtn">Analyze Signal Values</button>
+  <button type="button" class="secondary" id="manualSignalClearBtn">Clear</button>
+</div>
+
+<div id="manualSignalResults" style="margin-top:12px"></div>
+</div>
+
 <div class="card">
 <h3>Screenshot Auto-Identify</h3>
 <p class="muted small">Choose a cellular diagnostic screenshot. The app automatically reads PLMN, LTE/5G, Cell ID/NCI, band, bandwidth, PCI, TAC and signal values from the picture, then identifies the tower.</p>
@@ -385,14 +409,10 @@ if('serviceWorker' in navigator){
 <div><label>Bandwidth</label><input id="sBw"></div>
 <div><label>PCI</label><input id="sPci"></div>
 <div><label>TAC</label><input id="sTac"></div>
-<div style="grid-column:1/-1;margin-top:4px"><b>Signal Values</b><div class="small">Type RSRP, RSRQ, and SNR/SINR values here even without a screenshot. The signal ratings and expected call, video, and data experience update from the values you enter.</div></div>
+<div style="grid-column:1/-1;margin-top:4px"><b>Scanned Signal Values</b><div class="small">These belong to the scanned tower result and can be edited before Save All.</div></div>
 <div><label>RSRP</label><input id="sRsrp" inputmode="decimal" placeholder="e.g. -95"></div>
 <div><label>RSRQ</label><input id="sRsrq" inputmode="decimal" placeholder="e.g. -12"></div>
 <div><label>SNR / SINR</label><input id="sSnr" inputmode="decimal" placeholder="e.g. 18.5"></div>
-<div style="grid-column:1/-1">
-  <button type="button" id="manualSignalAnalyzeBtn" class="primary" style="width:100%;margin-top:8px">Analyze Signal Values</button>
-  <div id="manualSignalResults" style="margin-top:12px"></div>
-</div>
 </div>
 <div style="margin-top:12px">
   <button id="scanSaveAllBtn" class="good" type="button" onclick="saveAllScanEdits()" style="width:100%;font-size:1.05rem">Save All</button>
@@ -4281,7 +4301,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 4';
+  const BUILD='Current 5';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -4378,93 +4398,155 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
  document.addEventListener('click',e=>{if(/scan\\s*&?\\s*identify/i.test(e.target?.textContent||''))setTimeout(refresh,1000)});setInterval(refresh,2500);
 })();
 
-(function(){
- function n(v){
-   const m=String(v??'').match(/-?\d+(?:\.\d+)?/);
-   return m ? Number(m[0]) : null;
- }
- function gradeRSRP(v){
-   if(v===null) return ['⚪','Unknown'];
-   if(v>=-90) return ['🟢','Excellent'];
-   if(v>=-105) return ['🟡','Good'];
-   if(v>=-115) return ['🟠','Fair'];
-   return ['🔴','Poor'];
- }
- function gradeRSRQ(v){
-   if(v===null) return ['⚪','Unknown'];
-   if(v>=-10) return ['🟢','Excellent'];
-   if(v>=-15) return ['🟡','Good'];
-   if(v>=-20) return ['🟠','Fair'];
-   return ['🔴','Poor'];
- }
- function gradeSNR(v){
-   if(v===null) return ['⚪','Unknown'];
-   if(v>=20) return ['🟢','Excellent'];
-   if(v>=10) return ['🟡','Good'];
-   if(v>=0) return ['🟠','Fair'];
-   return ['🔴','Poor'];
- }
- function box(title, grade, value, unit, measure, effect){
-   return `<div class="card" style="margin:10px 0;padding:14px">
-     <div style="font-weight:800;font-size:1.08em">${title}</div>
-     <div style="font-weight:700;margin:5px 0">${grade[0]} ${grade[1]}: ${value===null?'Unknown':value+' '+unit}</div>
-     <div>${measure}</div><div><b>Effect:</b> ${effect}</div>
-   </div>`;
- }
- function effectRSRP(g){
-   return g==='Excellent'?'Strong received power. Coverage should be robust, including indoors in many situations.':
-   g==='Good'?'Healthy received power. Calls and data should generally remain stable.':
-   g==='Fair'?'Weakening received power. Calls can become less robust and data may slow or fluctuate, especially indoors or near the cell edge.':
-   g==='Poor'?'Weak received power. Calls may become unstable and data performance can drop significantly.':'No RSRP value entered.';
- }
- function effectRSRQ(g){
-   return g==='Excellent'?'Very clean signal quality. Interference and cell loading should have little effect on calls, latency, or throughput.':
-   g==='Good'?'Generally clean signal quality with manageable interference or loading.':
-   g==='Fair'?'Noticeable interference or loading may reduce consistency and throughput.':
-   g==='Poor'?'Heavy interference or loading is likely to hurt reliability, latency, and throughput.':'No RSRQ value entered.';
- }
- function effectSNR(g){
-   return g==='Excellent'?'Excellent signal clarity. High-order modulation and consistent data performance are more likely.':
-   g==='Good'?'Good signal clarity. Calls and data should usually perform reliably.':
-   g==='Fair'?'Limited signal clarity. More retransmissions and conservative modulation can cause slower data, buffering, and less consistent call quality.':
-   g==='Poor'?'Poor signal clarity. Interference/noise can seriously affect calls, latency, and data throughput.':'No SNR/SINR value entered.';
- }
- function overall(rp,rq,sn){
-   const rank={Excellent:4,Good:3,Fair:2,Poor:1,Unknown:0};
-   const vals=[rp[1],rq[1],sn[1]].filter(x=>x!=='Unknown');
-   if(!vals.length) return ['⚪','Unknown','Enter at least one signal value to analyze it.'];
-   const worst=vals.reduce((a,b)=>rank[a]<=rank[b]?a:b);
-   if(worst==='Excellent') return ['🟢','Excellent','Expect strong call reliability, smooth video, and responsive data.'];
-   if(worst==='Good') return ['🟡','Good','Calls should be clear and generally stable. Streaming should be smooth with little buffering. Data should be reliable and responsive.'];
-   if(worst==='Fair') return ['🟠','Fair','Calls should usually work but may become less consistent. Video may buffer at times. Data speeds can fluctuate.'];
-   return ['🔴','Poor','Calls may be unstable, video may buffer heavily, and data can be slow or inconsistent.'];
- }
- function analyzeManualSignal(){
-   const rp=n(document.getElementById('sRsrp')?.value);
-   const rq=n(document.getElementById('sRsrq')?.value);
-   const sn=n(document.getElementById('sSnr')?.value);
-   const rg=gradeRSRP(rp), qg=gradeRSRQ(rq), sg=gradeSNR(sn), ov=overall(rg,qg,sg);
-   const out=document.getElementById('manualSignalResults');
-   if(!out) return;
-   out.innerHTML=`<div style="font-weight:800;font-size:1.15em;margin:4px 0 8px">Signal: ${ov[0]} ${ov[1]}</div>`+
-    box('RSRP — Signal Strength',rg,rp,'dBm',"Measures how strongly the tower’s signal reaches your phone.",effectRSRP(rg[1]))+
-    box('RSRQ — Signal Quality / Congestion',qg,rq,'dB',"Measures how clean the LTE signal is relative to interference and network loading.",effectRSRQ(qg[1]))+
-    box('SNR/SINR — Signal Clarity',sg,sn,'dB',"Measures how much stronger the useful signal is than interference and noise.",effectSNR(sg[1]))+
-    `<div class="card" style="margin:10px 0;padding:14px"><div style="font-weight:800;font-size:1.08em">Overall Expected Experience</div>
-      <div style="margin-top:8px">📞 <b>Calls:</b> ${ov[1]}. ${ov[2]}</div>
-      <div>🎬 <b>Video:</b> ${ov[1]}. ${ov[2]}</div>
-      <div>🌐 <b>Data:</b> ${ov[1]}. ${ov[2]}</div></div>`;
- }
- document.addEventListener('DOMContentLoaded',()=>{
-   const b=document.getElementById('manualSignalAnalyzeBtn');
-   if(b) b.addEventListener('click',analyzeManualSignal);
-   ['sRsrp','sRsrq','sSnr'].forEach(id=>{
-     const el=document.getElementById(id);
-     if(el) el.addEventListener('input',analyzeManualSignal);
-   });
- });
-})();
 
+
+</script>
+
+
+<script>
+(function(){
+  function numbers(v){
+    return (String(v||'').match(/-?\d+(?:\.\d+)?/g)||[]).map(Number).filter(Number.isFinite);
+  }
+  function mean(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : null; }
+  function round1(v){ return v===null ? null : Math.round(v*10)/10; }
+
+  function gradeRSRP(v){
+    if(v===null)return ['⚪','Unknown'];
+    if(v>=-89)return ['🟢','Excellent'];
+    if(v>=-104)return ['🟡','Good'];
+    if(v>=-114)return ['🟠','Fair'];
+    if(v>=-124)return ['🔴','Poor'];
+    return ['⚫','No Signal'];
+  }
+  function gradeRSRQ(v){
+    if(v===null)return ['⚪','Unknown'];
+    if(v>=-9)return ['🟢','Excellent'];
+    if(v>=-14)return ['🟡','Good'];
+    if(v>=-19)return ['🟠','Fair'];
+    return ['🔴','Poor'];
+  }
+  function gradeSNR(v){
+    if(v===null)return ['⚪','Unknown'];
+    if(v>=11)return ['🟢','Excellent'];
+    if(v>=6)return ['🟡','Good'];
+    if(v>=0)return ['🟠','Fair'];
+    return ['🔴','Poor'];
+  }
+
+  function effect(metric,g){
+    if(metric==='RSRP'){
+      return g==='Excellent'?'Strong received power. Coverage should be robust and indoor service is more likely to remain stable.':
+      g==='Good'?'Healthy received power. Everyday calling and data should generally remain reliable.':
+      g==='Fair'?'Weakening received power. Calls can become less robust and data may slow or fluctuate, especially indoors or near the cell edge.':
+      g==='Poor'?'Weak received power. Calls may become unstable and data performance can drop significantly.':
+      g==='No Signal'?'Received power is effectively unusable. Maintaining service may be difficult or impossible.':'No value entered.';
+    }
+    if(metric==='RSRQ'){
+      return g==='Excellent'?'Very clean signal quality. Interference and cell loading should have little effect on calls, latency, or throughput.':
+      g==='Good'?'Generally clean quality with manageable interference or network loading.':
+      g==='Fair'?'Noticeable interference or loading may reduce consistency, latency, and throughput.':
+      g==='Poor'?'Heavy interference or loading is likely to hurt reliability, latency, and throughput.':'No value entered.';
+    }
+    return g==='Excellent'?'Excellent signal clarity. Strong data performance is more likely.':
+    g==='Good'?'Good signal clarity. Calls and data should usually perform reliably.':
+    g==='Fair'?'Limited signal clarity. More retransmissions and conservative modulation can cause slower data, buffering, and less consistent call quality.':
+    g==='Poor'?'Poor signal clarity. Interference and noise can seriously affect calls, latency, and data throughput.':'No value entered.';
+  }
+
+  function overall(rp,rq,sn){
+    const rank={Excellent:5,Good:4,Fair:3,Poor:2,'No Signal':1,Unknown:0};
+    const vals=[rp[1],rq[1],sn[1]].filter(x=>x!=='Unknown');
+    if(!vals.length)return ['⚪','Unknown'];
+    const worst=vals.reduce((a,b)=>rank[a]<=rank[b]?a:b);
+    return [{Excellent:'🟢',Good:'🟡',Fair:'🟠',Poor:'🔴','No Signal':'⚫'}[worst]||'⚪',worst];
+  }
+
+  function experience(g){
+    if(g==='Excellent')return {
+      calls:'Excellent. Calls should sound clear and remain very stable.',
+      video:'Excellent. HD video should stream smoothly.',
+      data:'Excellent. Expect fast, responsive, consistent data when capacity is available.'
+    };
+    if(g==='Good')return {
+      calls:'Good. Calls should be clear and generally stable.',
+      video:'Good. Streaming should be smooth with little buffering.',
+      data:'Good. Expect reliable speeds and responsive browsing.'
+    };
+    if(g==='Fair')return {
+      calls:'Fair. Calls should usually work but may become less consistent or briefly choppy.',
+      video:'Fair. Video should work, but buffering or quality reductions may occur.',
+      data:'Fair. Speeds may fluctuate and latency can be more noticeable.'
+    };
+    if(g==='Poor')return {
+      calls:'Poor. Calls may become choppy, robotic, unstable, or drop.',
+      video:'Poor. Expect buffering, stalls, or substantial quality reductions.',
+      data:'Poor. Data may be slow, inconsistent, or temporarily unusable.'
+    };
+    if(g==='No Signal')return {
+      calls:'No Signal. Calls may fail or drop immediately.',
+      video:'No Signal. Streaming is effectively unusable.',
+      data:'No Signal. Data service may not remain connected.'
+    };
+    return {calls:'Unknown.',video:'Unknown.',data:'Unknown.'};
+  }
+
+  function metricBox(title,grade,value,unit,measure,effectText,count){
+    const avg=count>1?` <span class="small muted">(average of ${count} readings)</span>`:'';
+    return `<div class="card" style="margin:10px 0;padding:14px">
+      <div style="font-weight:800;font-size:1.08em">${title}</div>
+      <div style="font-weight:700;margin:5px 0">${grade[0]} ${grade[1]}: ${value===null?'Unknown':value+' '+unit}${avg}</div>
+      <div>${measure}</div><div><b>Effect:</b> ${effectText}</div>
+    </div>`;
+  }
+
+  function parseText(){
+    const t=document.getElementById('manualSignalText')?.value||'';
+    const defs=[
+      ['manualRsrp',/RSRP\s*:?\s*([^\n\r]+)/i],
+      ['manualRsrq',/RSRQ\s*:?\s*([^\n\r]+)/i],
+      ['manualSnr',/(?:SNR\s*\/\s*SINR|SINR\s*\/\s*SNR|SNR|SINR)\s*:?\s*([^\n\r]+)/i]
+    ];
+    for(const [id,re] of defs){
+      const m=t.match(re);
+      if(m){const el=document.getElementById(id);if(el)el.value=m[1].trim();}
+    }
+  }
+
+  function analyze(){
+    parseText();
+    const rpList=numbers(document.getElementById('manualRsrp')?.value);
+    const rqList=numbers(document.getElementById('manualRsrq')?.value);
+    const snList=numbers(document.getElementById('manualSnr')?.value);
+    const rp=round1(mean(rpList)),rq=round1(mean(rqList)),sn=round1(mean(snList));
+    const rg=gradeRSRP(rp),qg=gradeRSRQ(rq),sg=gradeSNR(sn),ov=overall(rg,qg,sg),e=experience(ov[1]);
+    const out=document.getElementById('manualSignalResults');if(!out)return;
+    out.innerHTML=
+      `<div style="font-weight:800;font-size:1.18em;margin:4px 0 10px">Signal: ${ov[0]} ${ov[1]}</div>`+
+      metricBox('RSRP — Signal Strength',rg,rp,'dBm',"Measures how strongly the tower’s signal reaches your phone.",effect('RSRP',rg[1]),rpList.length)+
+      metricBox('RSRQ — Signal Quality / Congestion',qg,rq,'dB',"Measures signal quality, interference, and network loading.",effect('RSRQ',qg[1]),rqList.length)+
+      metricBox('SNR/SINR — Signal Clarity',sg,sn,'dB',"Measures how much stronger the useful signal is than interference and noise.",effect('SNR',sg[1]),snList.length)+
+      `<div class="notice" style="margin-top:10px"><div style="font-weight:800;font-size:1.08em;margin-bottom:7px">Overall Expected Experience</div>
+        <div>📞 <b>Calls:</b> ${e.calls}</div>
+        <div>🎬 <b>Video:</b> ${e.video}</div>
+        <div>🌐 <b>Data:</b> ${e.data}</div>
+      </div>`;
+  }
+
+  function clearAll(){
+    ['manualSignalText','manualRsrp','manualRsrq','manualSnr'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    const out=document.getElementById('manualSignalResults');if(out)out.innerHTML='';
+  }
+
+  document.addEventListener('DOMContentLoaded',()=>{
+    document.getElementById('manualSignalAnalyzeBtn')?.addEventListener('click',analyze);
+    document.getElementById('manualSignalClearBtn')?.addEventListener('click',clearAll);
+    ['manualRsrp','manualRsrq','manualSnr'].forEach(id=>document.getElementById(id)?.addEventListener('input',analyze));
+    document.getElementById('manualSignalText')?.addEventListener('input',analyze);
+  });
+
+  window.__manualSignalAnalyzerTest={numbers,mean,gradeRSRP,gradeRSRQ,gradeSNR};
+})();
 </script>
 
 </body>

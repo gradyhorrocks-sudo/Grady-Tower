@@ -2232,7 +2232,7 @@
       "radio": "5G",
       "site": "Spanish Fork North ?",
       "status": "provisional",
-      "bands": "B25 B71",
+      "bands": "n25 n71",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1863257"
     },
@@ -2242,7 +2242,7 @@
       "radio": "5G",
       "site": "Spanish Fork North ?",
       "status": "provisional",
-      "bands": "B41",
+      "bands": "n41",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1863262"
     },
@@ -2252,7 +2252,7 @@
       "radio": "5G",
       "site": "Spanish Fork 800 North ?",
       "status": "provisional",
-      "bands": "B41",
+      "bands": "n41",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1854933"
     },
@@ -2262,7 +2262,7 @@
       "radio": "5G",
       "site": "Spanish Fork 800 North ?",
       "status": "provisional",
-      "bands": "B71",
+      "bands": "n71",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1844892"
     },
@@ -2272,7 +2272,7 @@
       "radio": "5G",
       "site": "Spanish Fork Southwest ?",
       "status": "provisional",
-      "bands": "B25",
+      "bands": "n25",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1878397"
     },
@@ -2282,7 +2282,7 @@
       "radio": "5G",
       "site": "Spanish Fork Southwest ?",
       "status": "provisional",
-      "bands": "B41",
+      "bands": "n41",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1849602"
     },
@@ -2292,7 +2292,7 @@
       "radio": "5G",
       "site": "Spanish Fork Southeast ?",
       "status": "provisional",
-      "bands": "B25",
+      "bands": "n25",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1878321"
     },
@@ -2302,7 +2302,7 @@
       "radio": "5G",
       "site": "Spanish Fork Southeast ?",
       "status": "provisional",
-      "bands": "B41",
+      "bands": "n41",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1856035"
     },
@@ -2312,7 +2312,7 @@
       "radio": "5G",
       "site": "Spanish Fork East Canyon Road ?",
       "status": "provisional",
-      "bands": "B25 B71",
+      "bands": "n25 n71",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1104837"
     },
@@ -2322,7 +2322,7 @@
       "radio": "5G",
       "site": "Spanish Fork East Canyon Road ?",
       "status": "provisional",
-      "bands": "B41",
+      "bands": "n41",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1841602"
     },
@@ -2332,7 +2332,7 @@
       "radio": "5G",
       "site": "Spanish Fork East Canyon Road ?",
       "status": "provisional",
-      "bands": "B71",
+      "bands": "n71",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1841527"
     },
@@ -2342,7 +2342,7 @@
       "radio": "5G",
       "site": "Mapleton Heights ?",
       "status": "provisional",
-      "bands": "B25 B71",
+      "bands": "n25 n71",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1863255"
     },
@@ -2352,7 +2352,7 @@
       "radio": "5G",
       "site": "Mapleton Heights ?",
       "status": "provisional",
-      "bands": "B41",
+      "bands": "n41",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1863260"
     },
@@ -2362,7 +2362,7 @@
       "radio": "5G",
       "site": "Mapleton Main Street ?",
       "status": "provisional",
-      "bands": "B25 B71",
+      "bands": "n25 n71",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1863256"
     },
@@ -2372,9 +2372,19 @@
       "radio": "5G",
       "site": "Mapleton Main Street ?",
       "status": "provisional",
-      "bands": "B41",
+      "bands": "n41",
       "notes": "Green CellMapper 5G tower from repeated Spanish Fork/Mapleton map screenshots. Site name is map-derived and waiting for confirmation; colocated eNBs share this site name.",
       "gNB": "1863261"
+    },
+    {
+      "carrier": "AT&T",
+      "plmn": "310410",
+      "radio": "LTE",
+      "eNB": "45066",
+      "site": "Nine Mile Road",
+      "status": "confirmed",
+      "bands": "",
+      "notes": "User-confirmed site name."
     }
   ]
 }

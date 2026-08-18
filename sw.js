@@ -1,4 +1,4 @@
-const CACHE='mctr-v83-hardfix-2201';
+const CACHE='mctr-current2-20260818';
 const ASSETS=['./registry.json','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
 self.skipWaiting();
@@ -35,12 +35,10 @@ self.addEventListener('fetch',event=>{
     return;
   }
 
-  // Static assets may use cache-first.
-  event.respondWith(
-    caches.match(req).then(cached=>cached || fetch(req).then(resp=>{
-      const copy=resp.clone();
-      caches.open(CACHE).then(cache=>cache.put(req,copy));
-      return resp;
-    }))
-  );
+  // Registry data must be network-first so newly deployed towers are visible.
+  if(url.pathname.endsWith('/registry.json')){
+    event.respondWith(fetch(req,{cache:'no-store'}).then(resp=>{const copy=resp.clone();caches.open(CACHE).then(cache=>cache.put(req,copy));return resp}).catch(()=>caches.match(req)));
+    return;
+  }
+  event.respondWith(caches.match(req).then(cached=>cached || fetch(req).then(resp=>{const copy=resp.clone();caches.open(CACHE).then(cache=>cache.put(req,copy));return resp})));
 });

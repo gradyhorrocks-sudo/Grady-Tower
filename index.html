@@ -3814,11 +3814,49 @@ function normalizeBandToken(raw, radio){
 }
 
 
+function normalizeExplicitNrBandRowToken(raw){
+ // Only call this on text captured from an explicit Band row.
+ // Normalize common OCR lookalikes, but never infer from a bare number.
+ let v=String(raw||'').trim()
+   .replace(/\u2212/g,'-')
+   .replace(/\s+/g,'')
+   .replace(/[,:;.=]+$/g,'')
+   .toLowerCase();
+
+ // Require an n/N prefix from the screenshot. A bare "71" is never promoted to n71.
+ if(!/^n/.test(v))return '';
+
+ // Common OCR confusions within numeric portion: I/l/| -> 1, O -> 0.
+ v='n'+v.slice(1)
+   .replace(/[il|]/g,'1')
+   .replace(/o/g,'0')
+   .replace(/[^0-9]/g,'');
+
+ // Explicitly preserve the global ban.
+ if(v==='n1' || v==='n7')return '';
+
+ return /^n(?:2|25|41|66|71|77)$/.test(v) ? v : '';
+}
+
 function explicit5gBandFromSection(section){
  const t=String(section||'').replace(/\r/g,'');
- // Require the literal Band label AND an n-prefixed NR band on the same row.
- const m=t.match(/(?:^|\n)\s*Band\s*:?\s*(n(?:2|25|41|66|71|77))\b/im);
- return m ? m[1].toLowerCase() : '';
+
+ // Read only the value on an explicit Band row. Do not search the rest of the
+ // section for random numbers or infer an NR band from bandwidth/PCI/etc.
+ const row=t.match(/(?:^|\n)\s*Band\s*:?\s*([^\n\r]+)/im);
+ if(!row)return '';
+
+ // First try the strict literal supported token.
+ const strict=String(row[1]||'').match(/\b(n(?:2|25|41|66|71|77))\b/i);
+ if(strict){
+   const v=sanitizeNrBand(strict[1]);
+   if(v)return v;
+ }
+
+ // Then normalize OCR-only lookalikes such as n7I, n7l, n7|, n 71.
+ // Still requires the explicit Band row and an n-prefix.
+ const firstToken=String(row[1]||'').trim().split(/\s{2,}|\t/)[0];
+ return sanitizeNrBand(normalizeExplicitNrBandRowToken(firstToken));
 }
 function parseDualRadioSections(text){
  const caps=normalizeCapabilitiesFromOCR(text);
@@ -4742,7 +4780,8 @@ function fillScanResults(x,text){
  // FINAL 5G BAND GUARD: run BEFORE rendering so explicit supported NR band survives to the live card.
  if(String(x.radio||'').toUpperCase()==='5G'){
    const strictDual=parseDualRadioSections(text||'');
-   x.band=sanitizeNrBand(strictDual.five.band || '');
+   const explicit5gBand=explicit5gBandFromSection(extractSection(text||'','5G','LTE'));
+   x.band=sanitizeNrBand(explicit5gBand || strictDual.five.band || '');
    x.bandwidth=strictDual.five.bandwidth || '';
    // Keep the field name used by the live result renderer in sync.
    if(strictDual.five.bandwidth)x.bw=strictDual.five.bandwidth;
@@ -4931,7 +4970,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 19';
+  const BUILD='Current 20';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

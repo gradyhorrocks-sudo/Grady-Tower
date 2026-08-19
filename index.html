@@ -3286,6 +3286,7 @@ function identifyFromScan(fields){
 
  document.getElementById('scanIdentity').innerHTML=warnMissing+`<div class="card result ${cls}">
  <h2>${esc(name)}</h2>
+ ${duplicateDualRadioCellStatus(fields)}
  <div class="kv">
  <div class="label">Carrier</div><div>${esc(carrier)}</div>
  <div class="label">PLMN</div><div>${esc(plmn||'Unknown')}</div>
@@ -4456,6 +4457,35 @@ function dualRadioVerificationCard(fields){
    ${five}${lte}
  </div>`;
 }
+
+function duplicateDualRadioCellStatus(fields){
+ const raw=String(fields?._ocrText||'').replace(/\r/g,'');
+ if(!raw)return '';
+
+ const five=extractSection(raw,'5G','LTE');
+ const lte=extractSection(raw,'LTE',null);
+
+ function cellFromSection(section){
+   let v=parseNumericToken(sectionValue(section,'Cell\\s*Id|Cell\\s*ID|NCI|ECI'));
+   if(v)return String(v);
+   const m=String(section||'').match(/(?:Cell\s*[I1l][dD]|Cell\s*ID|NCI|ECI)\s*:?\s*([0-9OoIl|]{5,15})/i);
+   return m?normalizeNum(m[1]):'';
+ }
+
+ const fiveCell=cellFromSection(five);
+ const lteCell=cellFromSection(lte);
+
+ // User-defined rule for this exact duplicate-ID situation:
+ // when both radio sections report the SAME Cell ID value, mark 5G valid
+ // and LTE invalid. Do not let this depend on registry matching.
+ if(fiveCell && lteCell && fiveCell===lteCell){
+   return `<div class="notice duplicate-dual-radio-status" style="margin:12px 0;border:3px solid #22c55e">
+     <div><b>✅ 5G</b> — use the 5G identification for this duplicate Cell ID scan.</div>
+     <div><b>❌ LTE</b> — do not use the duplicated LTE Cell ID for tower identification.</div>
+   </div>`;
+ }
+ return '';
+}
 function identifyFromScan(fields){
  fields=enrichSparseLteScan(fields);
  if(!DB)return;
@@ -4624,6 +4654,7 @@ function identifyFromScan(fields){
 
  document.getElementById('scanIdentity').innerHTML=`<div class="card result ${cls}">
  <h2>${esc(name)}</h2>
+ ${duplicateDualRadioCellStatus(fields)}
  <div class="kv">
  <div class="label">Carrier</div><div>${esc(carrier)}</div>
  <div class="label">PLMN</div><div>${esc(plmn)}</div>
@@ -5203,7 +5234,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 24';
+  const BUILD='Current 25';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

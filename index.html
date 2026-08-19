@@ -279,7 +279,7 @@ if('serviceWorker' in navigator){
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
-  <b>CURRENT 5:</b> CellMapper and Backup removed.
+  <b>CURRENT 9:</b> CellMapper and Backup removed.
 </div>
 
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
@@ -347,29 +347,6 @@ if('serviceWorker' in navigator){
 
 <section id="tab-scan" class="hidden">
 
-<div class="card" id="manualSignalCard">
-<h3>Manual Signal Analyzer</h3>
-<p class="muted small">Use this when someone texts you signal values. No screenshot, Cell ID, or tower information is required.</p>
-
-<label for="manualSignalText">Paste the text you received</label>
-<textarea id="manualSignalText" style="min-height:96px" placeholder="RSRP: -111&#10;RSRQ: -9&#10;SNR/SINR: 3.2"></textarea>
-
-<div class="grid" style="margin-top:12px">
-  <div><label for="manualRsrp">RSRP</label><input id="manualRsrp" inputmode="decimal" placeholder="-111"></div>
-  <div><label for="manualRsrq">RSRQ</label><input id="manualRsrq" inputmode="decimal" placeholder="-9"></div>
-  <div><label for="manualSnr">SNR / SINR</label><input id="manualSnr" inputmode="decimal" placeholder="3.2"></div>
-</div>
-
-<div class="small muted" style="margin-top:8px">You can also enter several readings separated by spaces or commas. The analyzer uses the average.</div>
-
-<div class="row" style="margin-top:12px">
-  <button type="button" id="manualSignalAnalyzeBtn">Analyze Signal Values</button>
-  <button type="button" class="secondary" id="manualSignalClearBtn">Clear</button>
-</div>
-
-<div id="manualSignalResults" style="margin-top:12px"></div>
-</div>
-
 <div class="card">
 <h3>Screenshot Auto-Identify</h3>
 <p class="muted small">Choose a cellular diagnostic screenshot. The app automatically reads PLMN, LTE/5G, Cell ID/NCI, band, bandwidth, PCI, TAC and signal values from the picture, then identifies the tower.</p>
@@ -423,6 +400,29 @@ if('serviceWorker' in navigator){
 <textarea id="ocrText" style="min-height:160px"></textarea>
 </div>
 </div>
+</div>
+
+<div class="card" id="manualSignalCard">
+<h3>Manual Signal Analyzer</h3>
+<p class="muted small">Use this when someone texts you signal values. No screenshot, Cell ID, or tower information is required.</p>
+
+<label for="manualSignalText">Paste the text you received</label>
+<textarea id="manualSignalText" style="min-height:96px" placeholder="RSRP: -111&#10;RSRQ: -9&#10;SNR/SINR: 3.2"></textarea>
+
+<div class="grid" style="margin-top:12px">
+  <div><label for="manualRsrp">RSRP</label><input id="manualRsrp" inputmode="decimal" placeholder="-111"></div>
+  <div><label for="manualRsrq">RSRQ</label><input id="manualRsrq" inputmode="decimal" placeholder="-9"></div>
+  <div><label for="manualSnr">SNR / SINR</label><input id="manualSnr" inputmode="decimal" placeholder="3.2"></div>
+</div>
+
+<div class="small muted" style="margin-top:8px">You can also enter several readings separated by spaces or commas. The analyzer uses the average.</div>
+
+<div class="row" style="margin-top:12px">
+  <button type="button" id="manualSignalAnalyzeBtn">Analyze Signal Values</button>
+  <button type="button" class="secondary" id="manualSignalClearBtn">Clear</button>
+</div>
+
+<div id="manualSignalResults" style="margin-top:12px"></div>
 </div>
 </section>
 
@@ -1211,7 +1211,7 @@ function discardAllPendingChanges(){
 }
 
 fetch('registry.json?v=current2',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('registry.json '+r.status);return r.json()}).then(j=>{
- BUILTIN=j;DB=mergeBuiltinRegistry(j,loadLocal());saveLocal();renderRegistry();refreshUniversalLookupIfPresent();refreshCarrierList();syncPlmn();
+ BUILTIN=j;DB=purgeForbiddenNrBandsFromRegistry(mergeBuiltinRegistry(j,loadLocal()));saveLocal();renderRegistry();refreshUniversalLookupIfPresent();refreshCarrierList();syncPlmn();
 }).catch(err=>{console.error('Registry load failed',err);const out=document.getElementById('out');if(out)out.innerHTML='<div class="card unknown">Could not load registry.json.</div>'});
 
 function signalRating(kind,v){
@@ -2306,8 +2306,8 @@ function lookup(){
  <div class="label">Carrier</div><div>${esc(carrier)}</div><div class="label">PLMN</div><div>${esc(plmn||'Unknown')}</div>
  <div class="label">LTE/5G</div><div>${radio}</div><div class="label">Band</div><div>${esc(document.getElementById('lookupBand').value||rec?.bands||'Unknown')}</div>
  <div class="label">Bandwidth</div><div>${esc(document.getElementById('lookupBw').value||rec?.bandwidth||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}${radio==='5G'&&raw?' ?':''}</div>
- <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(local||'Unknown')}${radio==='5G'&&raw?' ?':''}</div>
+ <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(radio==='5G'?'Unknown':(sid||'Unknown'))}</div>
+ <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(radio==='5G'?'Unknown':(local||'Unknown'))}</div>
  <div class="label">Cell ID/NCI</div><div>${esc(raw||'Unknown')}</div><div class="label">PCI</div><div>${esc(document.getElementById('lookupPci').value||'Unknown')}</div>
  <div class="label">TAC</div><div>${esc(tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
  </div>
@@ -2799,11 +2799,17 @@ function extractScanFields(text){
    /(?:^|\n)\s*(?:TAC|Tracking\s*Area(?:\s*Code)?)\s*[:#=-]?\s*([0-9OoIl|]{1,8})\b/im
  ]));
 
- let band=firstMatch(t,[
-   /(?:LTE\s*Band|NR\s*Band|Band)\s*[:#=-]?\s*((?:n|B)?\s*\d{1,3})/i,
-   /\b(n(?:25|41|71)|B(?:2|4|5|12|13|14|17|30|66|71))\b/i
- ]).replace(/\s+/g,'');
- if(band && !/^[Bn]/.test(band)) band=(radio==='5G'?'n':'B')+band;
+ let band='';
+ if(radio==='5G'){
+   band=explicit5gBandFromSection(extractSection(t,'5G','LTE'));
+   band=sanitizeNrBand(band);
+ }else{
+   band=firstMatch(t,[
+     /(?:LTE\s*Band|Band)\s*[:#=-]?\s*((?:B)?\s*\d{1,3})/i,
+     /\b(B(?:2|4|5|12|13|14|17|30|66|71))\b/i
+   ]).replace(/\s+/g,'');
+   if(band && !/^B/i.test(band))band='B'+band;
+ }
 
  let bw=firstMatch(t,[
    /(?:Bandwidth|BW)\s*[:#=-]?\s*(\d{1,3}\s*MHz)/i
@@ -2818,7 +2824,7 @@ function extractScanFields(text){
    try{
      const n=BigInt(cell);
      if(radio==='LTE'){sid=(n/256n).toString();local=(n%256n).toString();}
-     else{sid=(n/4096n).toString();local=(n%4096n).toString();}
+     else{sid='';local='';}
    }catch(e){}
  }
 
@@ -3086,7 +3092,27 @@ function compactExperienceSummaryHtml(fields,rr,rq,sr){
     +'</div></div>';
 }
 
+
+function isForbiddenNrBand(b){
+ return /^n(?:1|7)$/i.test(String(b||'').trim());
+}
+function sanitizeNrBand(b){
+ const v=String(b||'').trim();
+ if(!v || isForbiddenNrBand(v))return '';
+ return /^n(?:2|25|41|66|71|77)$/i.test(v) ? v.toLowerCase() : '';
+}
+function purgeForbiddenNrBandsFromRegistry(db){
+ if(!db || !Array.isArray(db.records))return db;
+ for(const r of db.records){
+   if(String(r.radio||'').toUpperCase()==='5G'){
+     r.bands=String(r.bands||'').split(/\s+/).filter(Boolean)
+       .filter(b=>!isForbiddenNrBand(b)).join(' ');
+   }
+ }
+ return db;
+}
 function identifyFromScan(fields){
+ if(String(fields?.radio||'').toUpperCase()==='5G'){fields.band=sanitizeNrBand(fields.band);fields.sid='';fields.local='';}
  if(!DB)return;
  const plmn=fields.plmn||'';
  const radio=fields.radio||'LTE';
@@ -3121,8 +3147,7 @@ function identifyFromScan(fields){
        const e=n/256n,s=n%256n,rev=e*256n+s;
        math=`${raw} // 256 = ${e}, remainder ${s}. Reverse: ${e} × 256 + ${s} = ${rev} ${(String(e)===String(sid)&&rev===n)?'✅':'❌'}`;
      }else{
-       const g=n/4096n,l=n%4096n,rev=g*4096n+l;
-       math=`Assumed 12-bit split ?: ${raw} // 4096 = ${g}, remainder ${l}. Reverse: ${g} × 4096 + ${l} = ${rev} ${(String(g)===String(sid)&&rev===n)?'✅':'❌'}`;
+       math='5G gNB/local-cell split not inferred from this diagnostic format.';
      }
    }catch(e){}
  }
@@ -3209,10 +3234,10 @@ function identifyFromScan(fields){
  <div class="label">Carrier</div><div>${esc(carrier)}</div>
  <div class="label">PLMN</div><div>${esc(plmn||'Unknown')}</div>
  <div class="label">LTE/5G</div><div>${esc(radio)}</div>
- <div class="label">Band</div><div>${esc(fields.band||rec?.bands||'Unknown')}</div>
+ <div class="label">Band</div><div>${esc(radio==='5G'?(sanitizeNrBand(fields.band)||'Unknown'):(fields.band||rec?.bands||'Unknown'))}</div>
  <div class="label">Bandwidth</div><div>${esc(fields.bw||rec?.bandwidth||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}${radio==='5G'&&raw?' ?':''}</div>
- <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(local||'Unknown')}${radio==='5G'&&raw?' ?':''}</div>
+ <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(radio==='5G'?'Unknown':(sid||'Unknown'))}</div>
+ <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(radio==='5G'?'Unknown':(local||'Unknown'))}</div>
  <div class="label">Cell ID/NCI</div><div>${esc(raw||'Unknown')}</div>
  <div class="label">PCI</div><div>${esc(fields.pci||'Unknown')}</div>
  <div class="label">TAC</div><div>${esc(fields.tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
@@ -3351,18 +3376,17 @@ function mergeScanFields(primary,secondary){
  if(secondary.radio==='5G' || /^n/i.test(x.band||''))x.radio='5G';
  else if(!x.radio && secondary.radio)x.radio=secondary.radio;
 
- // Normalize band after merging.
+ // Normalize band after merging without ever manufacturing an NR band.
  if(x.band){
    x.band=x.band.replace(/\s+/g,'');
-   if(x.radio==='5G'&&!/^n/i.test(x.band))x.band='n'+x.band.replace(/^[Bb]/,'');
+   if(x.radio==='5G')x.band=sanitizeNrBand(x.band);
    if(x.radio==='LTE'&&!/^B/i.test(x.band))x.band='B'+x.band.replace(/^[Nn]/,'');
-   if(/^N/.test(x.band))x.band='n'+x.band.slice(1);
  }
  x.sid='';x.local='';
  if(x.cell){
    try{
      const n=BigInt(x.cell);
-     if(x.radio==='5G'){x.sid=(n/4096n).toString();x.local=(n%4096n).toString();}
+     if(x.radio==='5G'){x.sid='';x.local='';}
      else{x.sid=(n/256n).toString();x.local=(n%256n).toString();}
    }catch(e){}
  }
@@ -3426,21 +3450,15 @@ function extractScanFieldsSpatial(ocrData){
  const pci=normalizeNum(across(/\bPCI\b/i,/\b([0-9OoIl|]{1,4})\b/));
  const tac=normalizeNum(across(/\bTAC\b/i,/\b([0-9OoIl|]{1,8})\b/));
 
- let band=across(/\bBand\b/i,/\b((?:n|N|B|b)?\s*\d{1,3})\b/).replace(/\s+/g,'');
- if(band){
-   if(radio==='5G'&&!/^n/i.test(band))band='n'+band.replace(/^[Bb]/,'');
-   if(radio==='LTE'&&!/^B/i.test(band))band='B'+band.replace(/^[Nn]/,'');
-   if(/^N/.test(band))band='n'+band.slice(1);
-
-   // n71 is never valid in this project. In these screenshots it is an OCR
-   // misread of n71 where the 7 was dropped.
-   if(/^n71$/i.test(band)) band='n71';
-
-   // Do not invent unsupported 5G bands from OCR noise.
-   if(radio==='5G' && !/^n(?:2|25|41|66|71|77)$/i.test(band)) band='';
+ let band='';
+ if(radio==='5G'){
+   band=sanitizeNrBand(explicit5gBandFromSection(extractSection(text,'5G','LTE')));
+ }else{
+   band=across(/\bBand\b/i,/\b((?:B|b)?\s*\d{1,3})\b/).replace(/\s+/g,'');
+   if(band && !/^B/i.test(band))band='B'+band;
  }
- if(/^n(?:2|25|41|66|71|77)$/i.test(band)) radio='5G';
- if(/^B/i.test(band)) radio='LTE';
+ if(/^n(?:2|25|41|66|71|77)$/i.test(band))radio='5G';
+ if(/^B/i.test(band))radio='LTE';
 
  // Retry Cell Id after radio correction. The diagnostic UI uses a long NCI for 5G.
  if(!cell){
@@ -3470,8 +3488,8 @@ function extractScanFieldsSpatial(ocrData){
        sid=(n/256n).toString();
        local=(n%256n).toString();
      }else{
-       sid=(n/4096n).toString();
-       local=(n%4096n).toString();
+       sid='';
+       local='';
      }
    }catch(e){}
  }
@@ -3686,6 +3704,95 @@ function saveAllScanEdits(){
  return true;
 }
 
+
+function normalizeCapabilitiesFromOCR(text){
+ const m=String(text||'').match(/Network\s*Capabilities?\s*:?\s*([^\n\r]+)/i);
+ return m ? m[1].trim() : '';
+}
+
+function extractSection(text, heading, nextHeading){
+ const t=String(text||'');
+ const start=t.search(new RegExp('(?:^|\\n)\\s*'+heading+'\\s*(?:\\n|$)','im'));
+ if(start<0)return '';
+ const rest=t.slice(start);
+ if(!nextHeading)return rest;
+ const end=rest.slice(1).search(new RegExp('(?:^|\\n)\\s*'+nextHeading+'\\s*(?:\\n|$)','im'));
+ return end>=0 ? rest.slice(0,end+1) : rest;
+}
+
+function sectionValue(section,label){
+ const re=new RegExp('(?:^|\\n)\\s*(?:'+label+')\\s*:?\\s*([^\\n\\r]+)','im');
+ const m=String(section||'').match(re);
+ return m ? m[1].trim() : '';
+}
+
+function parseNumericToken(v){
+ const m=String(v||'').replace(/\u2212/g,'-').match(/-?\d+(?:\.\d+)?/);
+ return m ? m[0] : '';
+}
+
+function normalizeBandToken(raw, radio){
+ const v=String(raw||'').trim();
+ if(!v)return '';
+ const m=v.match(/(?:^|\s)(n?\d{1,3})(?:\s|$)/i);
+ if(!m)return '';
+ let token=m[1].toLowerCase();
+ if(radio==='5G'){
+   if(!token.startsWith('n')) return '';
+   if(token==='n1') return '';
+   if(!/^n(?:2|25|41|66|71|77)$/.test(token)) return '';
+   return token;
+ }
+ if(radio==='LTE'){
+   token=token.replace(/^n/i,'');
+   if(!/^\d{1,3}$/.test(token)) return '';
+   return 'B'+token;
+ }
+ return '';
+}
+
+
+function explicit5gBandFromSection(section){
+ const t=String(section||'').replace(/\r/g,'');
+ // Require the literal Band label AND an n-prefixed NR band on the same row.
+ const m=t.match(/(?:^|\n)\s*Band\s*:?\s*(n(?:2|25|41|66|71|77))\b/im);
+ return m ? m[1].toLowerCase() : '';
+}
+function parseDualRadioSections(text){
+ const caps=normalizeCapabilitiesFromOCR(text);
+ const five=extractSection(text,'5G','LTE');
+ const lte=extractSection(text,'LTE',null);
+
+ return {
+   capabilities:caps,
+   five:{
+     band:explicit5gBandFromSection(five),
+     bandwidth:sectionValue(five,'Bandwidth'),
+     cell:parseNumericToken(sectionValue(five,'Cell\\s*Id|Cell\\s*ID|NCI')),
+     pci:parseNumericToken(sectionValue(five,'PCI')),
+     rsrp:parseNumericToken(sectionValue(five,'RSRP')),
+     rsrq:parseNumericToken(sectionValue(five,'RSRQ')),
+     snr:parseNumericToken(sectionValue(five,'SNR|SINR|SINR0|SNR0'))
+   },
+   lte:{
+     band:normalizeBandToken(sectionValue(lte,'Band'),'LTE'),
+     bandwidth:sectionValue(lte,'Bandwidth'),
+     cell:parseNumericToken(sectionValue(lte,'Cell\\s*Id|Cell\\s*ID')),
+     pci:parseNumericToken(sectionValue(lte,'PCI')),
+     rsrp:parseNumericToken(sectionValue(lte,'RSRP')),
+     rsrq:parseNumericToken(sectionValue(lte,'RSRQ')),
+     snr:parseNumericToken(sectionValue(lte,'SNR|SINR|SINR0|SNR0'))
+   }
+ };
+}
+
+function safe5gIdentifierMath(cell){
+ // For these iPhone diagnostic screenshots, do not assume a gNB/local-cell split
+ // unless the app has an explicit trusted rule for the format. Preserve the NCI only.
+ const id=String(cell||'').trim();
+ if(!id)return {gNB:'',local:''};
+ return {gNB:'',local:''};
+}
 function identifyFromScan(fields){
  fields=enrichSparseLteScan(fields);
 
@@ -3824,10 +3931,10 @@ function identifyFromScan(fields){
  <div class="label">Carrier</div><div>${esc(carrier)}</div>
  <div class="label">PLMN</div><div>${esc(plmn)}</div>
  <div class="label">LTE/5G</div><div>${esc(radio)}</div>
- <div class="label">Band</div><div>${esc(fields.band||rec?.bands||'Unknown')}</div>
+ <div class="label">Band</div><div>${esc(radio==='5G'?(sanitizeNrBand(fields.band)||'Unknown'):(fields.band||rec?.bands||'Unknown'))}</div>
  <div class="label">Bandwidth</div><div>${esc(fields.bw||rec?.bandwidth||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid)}${radio==='5G'?' ?':''}</div>
- <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(fields.local||'Unknown')}${radio==='5G'?' ?':''}</div>
+ <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(radio==='5G'?'Unknown':(sid||'Unknown'))}</div>
+ <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(radio==='5G'?'Unknown':(fields.local||'Unknown'))}</div>
  <div class="label">Cell ID/NCI</div><div>${esc(raw)}</div>
  <div class="label">PCI</div><div>${esc(fields.pci||'Unknown')}</div>
  <div class="label">TAC</div><div>${esc(fields.tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
@@ -4117,6 +4224,30 @@ function prepareUnknownTowerFromScan(fields){
  },180);
 }
 function fillScanResults(x,text){
+ const dual=parseDualRadioSections(text||'');
+ if(dual.capabilities){
+   x.capabilities=dual.capabilities;
+ }
+
+ // If both sections are present, keep their values separate.
+ // Never infer a 5G band from LTE bandwidth/band rows.
+ if(dual.five.cell || dual.lte.cell){
+   if(dual.five.cell){
+     x.radio='5G';
+     x.cell=dual.five.cell;
+     x.pci=dual.five.pci||x.pci||'';
+     x.rsrp=dual.five.rsrp||x.rsrp||'';
+     x.rsrq=dual.five.rsrq||x.rsrq||'';
+     x.snr=dual.five.snr||x.snr||'';
+     x.band=dual.five.band||'';
+     x.bandwidth=dual.five.bandwidth||'';
+     const safe=safe5gIdentifierMath(dual.five.cell);
+     x.sid=safe.gNB;
+     x.local=safe.local;
+   }
+   x.dualRadioStats=dual;
+ }
+
  resetScanSaveAllState();
  document.getElementById('sSite').value='';
  document.getElementById('sPlmn').value=x.plmn;
@@ -4134,6 +4265,22 @@ function fillScanResults(x,text){
  document.getElementById('ocrText').value=text;
  document.getElementById('scanResults').classList.remove('hidden');
  identifyFromScan(x);
+
+ // FINAL 5G BAND GUARD: only an explicit "Band nXX" row in the 5G section is authoritative.
+ if(String(x.radio||'').toUpperCase()==='5G'){
+   const strictDual=parseDualRadioSections(text||'');
+   x.band=strictDual.five.band || '';
+   x.bandwidth=strictDual.five.bandwidth || '';
+   if(strictDual.five.cell){
+     x.cell=strictDual.five.cell;
+     x.pci=strictDual.five.pci||x.pci||'';
+     x.rsrp=strictDual.five.rsrp||x.rsrp||'';
+     x.rsrq=strictDual.five.rsrq||x.rsrq||'';
+     x.snr=strictDual.five.snr||x.snr||'';
+   }
+   x.sid='';
+   x.local='';
+ }
 }
 
 
@@ -4180,8 +4327,11 @@ function refreshFromScanInputs(){
  if(x.cell){
    try{
      const n=BigInt(x.cell);
-     if(x.radio==='5G'){x.sid=(n/4096n).toString();x.local=(n%4096n).toString();}
-     else{x.sid=(n/256n).toString();x.local=(n%256n).toString();}
+     if(x.radio==='5G'){
+       x.sid='';x.local='';x.band=sanitizeNrBand(x.band);
+     }else{
+       x.sid=(n/256n).toString();x.local=(n%256n).toString();
+     }
    }catch(e){}
  }
  document.getElementById('sId').value=x.sid;
@@ -4301,7 +4451,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 5';
+  const BUILD='Current 9';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
@@ -4376,7 +4526,10 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
   function stripInvalidN1(){
     document.querySelectorAll('input,textarea').forEach(el=>{
       const label=(el.id||'')+' '+(el.name||'')+' '+(el.previousElementSibling?.textContent||'');
-      if(/band/i.test(label) && /^\s*n1\s*$/i.test(el.value||'')) el.value='';
+      if(!/band/i.test(label))return;
+      const vals=String(el.value||'').split(/\s+/).filter(Boolean);
+      const cleaned=vals.filter(b=>!/^n(?:1|7)$/i.test(b));
+      if(cleaned.join(' ')!==vals.join(' '))el.value=cleaned.join(' ');
     });
   }
   document.addEventListener('input',stripInvalidN1,true);

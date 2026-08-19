@@ -3286,11 +3286,12 @@ function identifyFromScan(fields){
 
  document.getElementById('scanIdentity').innerHTML=warnMissing+`<div class="card result ${cls}">
  <h2>${esc(name)}</h2>
+ ${renderDualRadioIdentification(fields)}
  ${duplicateDualRadioCellStatus(fields)}
  <div class="kv">
  <div class="label">Carrier</div><div>${esc(carrier)}</div>
  <div class="label">PLMN</div><div>${esc(plmn||'Unknown')}</div>
- <div class="label">LTE/5G</div><div>${esc(radio)}</div>
+ <div class="label">LTE/5G</div><div>${esc((fields?.dualRadioStats?.five?.cell&&fields?.dualRadioStats?.lte?.cell)?'5G + LTE':radio)}</div>
  <div class="label">Band</div><div>${esc(radio==='5G'?(sanitizeNrBand(fields.band)||'Unknown'):(fields.band||rec?.bands||'Unknown'))}</div>
  <div class="label">Bandwidth</div><div>${esc(fields.bw||rec?.bandwidth||'Unknown')}</div>
  <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}</div>
@@ -4595,6 +4596,121 @@ function applySavedRegistryRadioAuthority(fields){
  return fields;
 }
 
+
+function identifyDualRadioSides(fields){
+ const dual=fields?.dualRadioStats||{};
+ const plmn=String(fields?.plmn||'').replace(/\D/g,'');
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+
+ function findLteRecordByEnb(id){
+   let record=matchRecordByExactTowerId(id,carrier,'LTE',plmn);
+   if(!record)record=matchRecordByExactTowerId(id,carrier,'LTE','');
+   if(record)return record;
+
+   // Full saved-registry fallback. This is intentionally broader than carrier-only
+   // matching because the user wants every mathematically supported registry
+   // possibility exposed rather than silently discarded.
+   const records=(typeof getRegistryRecords==='function')?getRegistryRecords():[];
+   return (records||[]).find(r=>{
+     if(String(r?.radio||'').toUpperCase()!=='LTE')return false;
+     const rid=String(r?.eNB||r?.enb||r?.id||r?.sid||'').replace(/\D/g,'');
+     return rid===String(id);
+   })||null;
+ }
+
+ function identifyLte(){
+   const cell=String(dual?.lte?.cell||'').replace(/\D/g,'');
+   if(!/^\d+$/.test(cell))return {present:false,radio:'LTE',cell:'',id:'',local:'',record:null,status:'unknown'};
+   try{
+     const n=BigInt(cell);
+     const id=(n/256n).toString();
+     const local=(n%256n).toString();
+     let record=matchRecordByExactCell(cell,carrier,'LTE',plmn);
+     if(!record)record=findLteRecordByEnb(id);
+     return {present:true,radio:'LTE',cell,id,local,record,status:record?'confirmed':'unknown'};
+   }catch(e){
+     return {present:true,radio:'LTE',cell,id:'',local:'',record:null,status:'unknown'};
+   }
+ }
+
+ function identify5g(){
+   const cell=String(dual?.five?.cell||'').replace(/\D/g,'');
+   if(!/^\d+$/.test(cell))return {present:false,radio:'5G',cell:'',id:'',local:'',record:null,status:'unknown',possible:null};
+
+   // Native 5G resolver first. A real saved 5G match is CONFIRMED.
+   const resolved=resolveScanFromEntireRegistry({
+     ...fields,radio:'5G',cell,
+     band:dual?.five?.band||fields?.band||''
+   });
+
+   if(resolved?.record && String(resolved.record?.radio||'').toUpperCase()==='5G'){
+     return {
+       present:true,radio:'5G',cell,
+       id:String(resolved.id||towerRecordId(resolved.record)||''),
+       local:String(resolved.local||''),
+       record:resolved.record,status:'confirmed',possible:null
+     };
+   }
+
+   // No native 5G registry hit. Expose the LTE-math collision as a POSSIBLE
+   // registry-backed tower instead of falsely calling it confirmed 5G.
+   let possible=null;
+   try{
+     const n=BigInt(cell);
+     const altId=(n/256n).toString();
+     const altLocal=(n%256n).toString();
+     const altRecord=findLteRecordByEnb(altId);
+     if(altRecord){
+       possible={
+         radio:'LTE',
+         record:altRecord,
+         id:altId,
+         local:altLocal,
+         reason:'5G NCI also forms a saved LTE ECI/eNB match'
+       };
+     }
+   }catch(e){}
+
+   const safe=safe5gIdentifierMath(cell);
+   return {
+     present:true,radio:'5G',cell,
+     id:String(safe?.gNB||''),
+     local:String(safe?.local||''),
+     record:null,status:possible?'possible':'unknown',possible
+   };
+ }
+
+ return {five:identify5g(),lte:identifyLte()};
+}
+
+function renderDualRadioIdentification(fields){
+ const d=identifyDualRadioSides(fields);
+ if(!d.five.present || !d.lte.present)return '';
+
+ let fiveLine='';
+ if(d.five.record){
+   const name=String(d.five.record.site||'Unknown');
+   const detail=d.five.id?` — gNB ${esc(d.five.id)}${d.five.local?`, local cell ${esc(d.five.local)}`:''}`:'';
+   fiveLine=`<div style="margin-bottom:8px"><b>✅ 5G: ${esc(name)} — CONFIRMED</b>${detail}<br><span class="small muted">NCI ${esc(d.five.cell)} • native 5G registry match</span></div>`;
+ }else if(d.five.possible?.record){
+   const name=String(d.five.possible.record.site||'Unknown');
+   fiveLine=`<div style="margin-bottom:8px"><b>⚠️ 5G: ${esc(name)} — POSSIBLE</b><br>
+     <span class="small muted">NCI ${esc(d.five.cell)} • alternate LTE interpretation: eNB ${esc(d.five.possible.id)}, sector ${esc(d.five.possible.local)} • saved registry match</span></div>`;
+ }else{
+   const detail=d.five.id?` — derived gNB ${esc(d.five.id)}${d.five.local?`, local cell ${esc(d.five.local)}`:''}`:'';
+   fiveLine=`<div style="margin-bottom:8px"><b>❌ 5G: Unmapped / Unknown</b>${detail}<br><span class="small muted">NCI ${esc(d.five.cell)}</span></div>`;
+ }
+
+ const lteName=d.lte.record?String(d.lte.record.site||'Unknown'):'Unmapped / Unknown';
+ const lteStatus=d.lte.record?'✅':'❌';
+ const lteState=d.lte.record?' — CONFIRMED':'';
+ const lteDetail=d.lte.id?` — eNB ${esc(d.lte.id)}${d.lte.local?`, sector ${esc(d.lte.local)}`:''}`:'';
+
+ return `<div class="notice dual-radio-identification" style="margin:12px 0;border:2px solid #64748b">
+   ${fiveLine}
+   <div><b>${lteStatus} LTE: ${esc(lteName)}${lteState}</b>${lteDetail}<br><span class="small muted">Cell ID ${esc(d.lte.cell)} • LTE math + saved registry</span></div>
+ </div>`;
+}
 function identifyFromScan(fields){
  fields=enrichSparseLteScan(fields);
  if(!DB)return;
@@ -4764,11 +4880,12 @@ function identifyFromScan(fields){
 
  document.getElementById('scanIdentity').innerHTML=`<div class="card result ${cls}">
  <h2>${esc(name)}</h2>
+ ${renderDualRadioIdentification(fields)}
  ${duplicateDualRadioCellStatus(fields)}
  <div class="kv">
  <div class="label">Carrier</div><div>${esc(carrier)}</div>
  <div class="label">PLMN</div><div>${esc(plmn)}</div>
- <div class="label">LTE/5G</div><div>${esc(radio)}</div>
+ <div class="label">LTE/5G</div><div>${esc((fields?.dualRadioStats?.five?.cell&&fields?.dualRadioStats?.lte?.cell)?'5G + LTE':radio)}</div>
  <div class="label">Band</div><div>${esc(radio==='5G'?(sanitizeNrBand(fields.band)||'Unknown'):(fields.band||rec?.bands||'Unknown'))}</div>
  <div class="label">Bandwidth</div><div>${esc(fields.bw||rec?.bandwidth||'Unknown')}</div>
  <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}</div>
@@ -5417,7 +5534,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 27';
+  const BUILD='Current 30';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

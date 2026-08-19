@@ -4739,13 +4739,13 @@ function fillScanResults(x,text){
  document.getElementById('sSnr').value=x.snr;
  document.getElementById('ocrText').value=text;
  document.getElementById('scanResults').classList.remove('hidden');
- identifyFromScan(x);
-
- // FINAL 5G BAND GUARD: only an explicit "Band nXX" row in the 5G section is authoritative.
+ // FINAL 5G BAND GUARD: run BEFORE rendering so explicit supported NR band survives to the live card.
  if(String(x.radio||'').toUpperCase()==='5G'){
    const strictDual=parseDualRadioSections(text||'');
-   x.band=strictDual.five.band || '';
+   x.band=sanitizeNrBand(strictDual.five.band || '');
    x.bandwidth=strictDual.five.bandwidth || '';
+   // Keep the field name used by the live result renderer in sync.
+   if(strictDual.five.bandwidth)x.bw=strictDual.five.bandwidth;
    if(strictDual.five.cell){
      x.cell=strictDual.five.cell;
      x.pci=strictDual.five.pci||x.pci||'';
@@ -4753,9 +4753,10 @@ function fillScanResults(x,text){
      x.rsrq=strictDual.five.rsrq||x.rsrq||'';
      x.snr=strictDual.five.snr||x.snr||'';
    }
-   x.sid='';
-   x.local='';
  }
+ identifyFromScan(x);
+
+ 
 }
 
 
@@ -4930,7 +4931,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 18';
+  const BUILD='Current 19';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

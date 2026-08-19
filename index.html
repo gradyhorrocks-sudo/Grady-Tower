@@ -3514,7 +3514,14 @@ function extractScanFieldsSpatial(ocrData){
 
  let band='';
  if(radio==='5G'){
-   band=sanitizeNrBand(explicit5gBandFromSection(extractSection(text,'5G','LTE')));
+   // PRIMARY: read the value directly across from the Band label using OCR word geometry.
+   const spatialBandRaw=across(/\bBand\b/i,/([nN]\s*[0-9OoIl|]{1,3})/);
+   const spatialBand=sanitizeNrBand(normalizeExplicitNrBandRowToken(spatialBandRaw));
+
+   // SECONDARY: flattened-text parser.
+   const textBand=sanitizeNrBand(explicit5gBandFromSection(extractSection(text,'5G','LTE')));
+
+   band=spatialBand || textBand || '';
  }else{
    band=across(/\bBand\b/i,/\b((?:B|b)?\s*\d{1,3})\b/).replace(/\s+/g,'');
    if(band && !/^B/i.test(band))band='B'+band;
@@ -4752,7 +4759,7 @@ function fillScanResults(x,text){
      x.rsrp=dual.five.rsrp||x.rsrp||'';
      x.rsrq=dual.five.rsrq||x.rsrq||'';
      x.snr=dual.five.snr||x.snr||'';
-     x.band=dual.five.band||'';
+     x.band=sanitizeNrBand(dual.five.band||x.band||'');
      x.bandwidth=dual.five.bandwidth||'';
      const safe=safe5gIdentifierMath(dual.five.cell);
      x.sid=safe.gNB;
@@ -4781,7 +4788,7 @@ function fillScanResults(x,text){
  if(String(x.radio||'').toUpperCase()==='5G'){
    const strictDual=parseDualRadioSections(text||'');
    const explicit5gBand=explicit5gBandFromSection(extractSection(text||'','5G','LTE'));
-   x.band=sanitizeNrBand(explicit5gBand || strictDual.five.band || '');
+   x.band=sanitizeNrBand(explicit5gBand || strictDual.five.band || x.band || '');
    x.bandwidth=strictDual.five.bandwidth || '';
    // Keep the field name used by the live result renderer in sync.
    if(strictDual.five.bandwidth)x.bw=strictDual.five.bandwidth;
@@ -4970,7 +4977,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 20';
+  const BUILD='Current 21';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

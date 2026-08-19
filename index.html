@@ -4172,6 +4172,49 @@ function resolveScanFromEntireRegistry(fields){
 
  return {record:null,id:'',local:'',source:'unmapped'};
 }
+
+function directKnownLteNoticeFromRaw(fields, rawText){
+ const text=String(rawText||fields?._ocrText||'');
+ if(!/\bLTE\b/i.test(text))return '';
+
+ const plmn=String(fields?.plmn||'').trim();
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+
+ // Extract LTE Cell ID strictly from the LTE section.
+ const lteSection=extractSection(text,'LTE',null);
+ let lteCell=parseNumericToken(sectionValue(lteSection,'Cell\\s*Id|Cell\\s*ID'));
+
+ // OCR fallback: find all large integers AFTER the LTE heading, then pick the one that
+ // derives to an exact LTE eNB in the registry.
+ const candidates=[];
+ if(lteCell)candidates.push(lteCell);
+ for(const x of (lteSection.match(/\b\d{7,12}\b/g)||[])){
+   if(!candidates.includes(x))candidates.push(x);
+ }
+
+ for(const cell of candidates){
+   if(!/^\d+$/.test(cell))continue;
+   try{
+     const n=BigInt(cell);
+     const enb=(n/256n).toString();
+     const sector=(n%256n).toString();
+
+     let rec=matchRecordByExactCell(cell,carrier,'LTE',plmn);
+     if(!rec)rec=matchRecordByExactTowerId(enb,carrier,'LTE',plmn);
+     if(!rec)rec=matchRecordByExactTowerId(enb,carrier,'LTE','');
+
+     if(rec){
+       const site=String(rec.site||'Unknown').trim();
+       return `<div class="notice lte-still-known-direct" style="margin-top:12px;border:3px solid #22c55e">
+         <b>✅ LTE site is still known:</b>
+         <b>${esc(site)}</b> — eNB ${esc(enb)}, sector ${esc(sector)}, LTE Cell ID ${esc(cell)}.
+         <br>The 5G side may be unmapped or may not show a 5G NCI, but the LTE site from this same screenshot is already known in the registry.
+       </div>`;
+     }
+   }catch(e){}
+ }
+ return '';
+}
 function identifyFromScan(fields){
  fields=enrichSparseLteScan(fields);
  if(!DB)return;
@@ -4233,6 +4276,7 @@ function identifyFromScan(fields){
     </div>
     <div class="notice scan-experience" style="margin-top:10px;padding:10px 12px"><b>Overall Expected Experience</b><div class="small" style="margin-top:5px;line-height:1.5"><div><b>📞 Calls:</b> ${esc(exp[0])}</div><div><b>🎬 Video:</b> ${esc(exp[1])}</div><div><b>🌐 Data:</b> ${esc(exp[2])}</div></div></div>
     <div class="notice" style="margin-top:10px"><b>Tower not identified yet.</b> The app will not substitute TAC, PCI, or another number for Cell ID/NCI.</div>
+    ${directKnownLteNoticeFromRaw(fields,fields._ocrText||'')}
     ${companionRadioNotice(fields,fields._ocrText||'')}
     ${knownLteAnchorNotice(fields,fields._ocrText||'')}
  ${radio==='5G'&&!rec?knownLteSiteSummary(fields,fields._ocrText||''):''}
@@ -4867,7 +4911,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 16';
+  const BUILD='Current 17';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

@@ -3886,6 +3886,71 @@ function matchRecordByExactTowerId(id,carrier,radio,plmn){
  });
  return hits.length===1 ? hits[0] : null;
 }
+
+function resolveCompanionRadioFromSameScan(fields){
+ const dual=fields?.dualRadioStats;
+ if(!dual)return null;
+
+ const currentRadio=String(fields?.radio||'').toUpperCase();
+ const plmn=String(fields?.plmn||'').trim();
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+
+ // If the primary result is 5G, use the LTE measurements from the SAME screenshot.
+ if(currentRadio==='5G' && dual.lte?.cell){
+   const lteCell=String(dual.lte.cell||'').trim();
+   const exact=matchRecordByExactCell(lteCell,carrier,'LTE',plmn);
+   if(exact){
+     return {record:exact,radio:'LTE',id:towerRecordId(exact),cell:lteCell,source:'exact-companion-cell'};
+   }
+   if(/^\d+$/.test(lteCell)){
+     try{
+       const n=BigInt(lteCell), enb=(n/256n).toString();
+       const rec=matchRecordByExactTowerId(enb,carrier,'LTE',plmn);
+       if(rec)return {record:rec,radio:'LTE',id:enb,cell:lteCell,source:'derived-companion-lte'};
+     }catch(e){}
+   }
+ }
+
+ // Symmetric rule: if primary is LTE and the SAME screenshot contains a 5G NCI,
+ // resolve that 5G side only against the full registry.
+ if(currentRadio==='LTE' && dual.five?.cell){
+   const fiveCell=String(dual.five.cell||'').trim();
+   const exact=matchRecordByExactCell(fiveCell,carrier,'5G',plmn);
+   if(exact){
+     return {record:exact,radio:'5G',id:towerRecordId(exact),cell:fiveCell,source:'exact-companion-cell'};
+   }
+   if(/^\d+$/.test(fiveCell)){
+     try{
+       const n=BigInt(fiveCell), matches=[];
+       for(let localBits=4;localBits<=14;localBits++){
+         const div=1n<<BigInt(localBits);
+         const g=(n/div).toString();
+         const rec=matchRecordByExactTowerId(g,carrier,'5G',plmn);
+         if(rec)matches.push({record:rec,radio:'5G',id:g,cell:fiveCell,source:'derived-companion-5g',localBits});
+       }
+       const uniq=[],seen=new Set();
+       for(const m of matches){
+         const k=towerRecordId(m.record)+'|'+m.localBits;
+         if(!seen.has(k)){seen.add(k);uniq.push(m);}
+       }
+       if(uniq.length===1)return uniq[0];
+     }catch(e){}
+   }
+ }
+ return null;
+}
+
+function companionRadioNotice(fields){
+ const c=resolveCompanionRadioFromSameScan(fields);
+ if(!c?.record)return '';
+ const site=String(c.record.site||'Unknown').trim();
+ const idLabel=c.radio==='LTE'?'eNB':'gNB';
+ return `<div class="notice companion-radio-match" style="margin-top:10px">
+   <b>Known on ${esc(c.radio)}:</b> The companion ${esc(c.radio)} connection in this same screenshot resolves to
+   <b>${esc(site)}</b> (${idLabel} ${esc(c.id)}).
+   The current ${esc(String(fields.radio||'').toUpperCase())} identifier is not mapped yet, but the other radio side is already in the registry.
+ </div>`;
+}
 function resolveScanFromEntireRegistry(fields){
  const plmn=String(fields?.plmn||'').trim();
  const radio=String(fields?.radio||'LTE').toUpperCase();
@@ -3995,6 +4060,7 @@ function identifyFromScan(fields){
     </div>
     <div class="notice scan-experience" style="margin-top:10px;padding:10px 12px"><b>Overall Expected Experience</b><div class="small" style="margin-top:5px;line-height:1.5"><div><b>📞 Calls:</b> ${esc(exp[0])}</div><div><b>🎬 Video:</b> ${esc(exp[1])}</div><div><b>🌐 Data:</b> ${esc(exp[2])}</div></div></div>
     <div class="notice" style="margin-top:10px"><b>Tower not identified yet.</b> The app will not substitute TAC, PCI, or another number for Cell ID/NCI.</div>
+    ${companionRadioNotice(fields)}
    </div>`;
    return;
  }
@@ -4622,7 +4688,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 11';
+  const BUILD='Current 12';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

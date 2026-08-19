@@ -1,4 +1,4 @@
-const CACHE='mctr-current11-20260818';
+const CACHE='mctr-current12-20260818';
 const ASSETS=['./registry.json','./manifest.json','./icon-192.png','./icon-512.png','./apple-touch-icon.png'];
 
 self.skipWaiting();

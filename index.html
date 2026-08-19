@@ -279,7 +279,7 @@ if('serviceWorker' in navigator){
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
-  <b>CURRENT 9:</b> CellMapper and Backup removed.
+  <b>CURRENT 10:</b> CellMapper and Backup removed.
 </div>
 
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
@@ -2306,8 +2306,8 @@ function lookup(){
  <div class="label">Carrier</div><div>${esc(carrier)}</div><div class="label">PLMN</div><div>${esc(plmn||'Unknown')}</div>
  <div class="label">LTE/5G</div><div>${radio}</div><div class="label">Band</div><div>${esc(document.getElementById('lookupBand').value||rec?.bands||'Unknown')}</div>
  <div class="label">Bandwidth</div><div>${esc(document.getElementById('lookupBw').value||rec?.bandwidth||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(radio==='5G'?'Unknown':(sid||'Unknown'))}</div>
- <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(radio==='5G'?'Unknown':(local||'Unknown'))}</div>
+ <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}</div>
+ <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(local||'Unknown')}</div>
  <div class="label">Cell ID/NCI</div><div>${esc(raw||'Unknown')}</div><div class="label">PCI</div><div>${esc(document.getElementById('lookupPci').value||'Unknown')}</div>
  <div class="label">TAC</div><div>${esc(tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
  </div>
@@ -3111,8 +3111,56 @@ function purgeForbiddenNrBandsFromRegistry(db){
  }
  return db;
 }
+
+function derive5gFromRegistry(nci, carrier, plmn){
+ const raw=String(nci||'').trim();
+ if(!/^\d+$/.test(raw) || !DB || !Array.isArray(DB.records)){
+   return {gNB:'',local:'',bits:null,matched:false};
+ }
+ let n;
+ try{ n=BigInt(raw); }catch(e){ return {gNB:'',local:'',bits:null,matched:false}; }
+
+ const relevant=DB.records.filter(r=>
+   String(r.radio||'').toUpperCase()==='5G' &&
+   String(r.gNB||'').trim() &&
+   (!carrier || String(r.carrier||'')===String(carrier)) &&
+   (!plmn || String(r.plmn||'')===String(plmn))
+ );
+
+ // NR Cell Identity is 36 bits total. gNB-ID length may vary from 22 to 32 bits,
+ // therefore the local cell portion can be 14 down to 4 bits.
+ // Do not assume one split. Only accept a split that matches a known registry gNB.
+ const matches=[];
+ for(let localBits=4; localBits<=14; localBits++){
+   const div=1n<<BigInt(localBits);
+   const g=(n/div).toString();
+   const local=(n%div).toString();
+   if(relevant.some(r=>String(r.gNB||'').trim()===g)){
+     matches.push({gNB:g,local,bits:localBits,matched:true});
+   }
+ }
+ if(matches.length===1)return matches[0];
+
+ // If multiple split lengths somehow point at known IDs, prefer the most specific
+ // record whose reverse math exactly reconstructs the NCI; all candidates already do,
+ // so reject ambiguity rather than inventing a tower.
+ return {gNB:'',local:'',bits:null,matched:false};
+}
+
+function describe5gNciStatus(fields){
+ if(String(fields?.radio||'').toUpperCase()!=='5G')return '';
+ if(fields?.sid)return '';
+ if(fields?.cell)return '5G NCI read successfully. No matching gNB is currently mapped in the registry.';
+ return '5G Cell ID/NCI was not read.';
+}
 function identifyFromScan(fields){
- if(String(fields?.radio||'').toUpperCase()==='5G'){fields.band=sanitizeNrBand(fields.band);fields.sid='';fields.local='';}
+ if(String(fields?.radio||'').toUpperCase()==='5G'){
+   fields.band=sanitizeNrBand(fields.band);
+   const d=derive5gFromRegistry(fields.cell,fields.carrier,fields.plmn);
+   fields.sid=d.matched?d.gNB:'';
+   fields.local=d.matched?d.local:'';
+   fields.gnbLocalBits=d.matched?d.bits:null;
+ }
  if(!DB)return;
  const plmn=fields.plmn||'';
  const radio=fields.radio||'LTE';
@@ -3147,7 +3195,15 @@ function identifyFromScan(fields){
        const e=n/256n,s=n%256n,rev=e*256n+s;
        math=`${raw} // 256 = ${e}, remainder ${s}. Reverse: ${e} × 256 + ${s} = ${rev} ${(String(e)===String(sid)&&rev===n)?'✅':'❌'}`;
      }else{
-       math='5G gNB/local-cell split not inferred from this diagnostic format.';
+       if(fields.sid && fields.gnbLocalBits){
+         try{
+           const n=BigInt(raw), div=1n<<BigInt(fields.gnbLocalBits);
+           const rev=BigInt(fields.sid)*div+BigInt(fields.local||0);
+           math=`Registry-matched 5G split: ${raw} // 2^${fields.gnbLocalBits} = gNB ${fields.sid}, local cell ${fields.local}. Reverse = ${rev} ${rev===n?'✅':'❌'}`;
+         }catch(e){math='5G NCI matched to a mapped gNB.';}
+       }else{
+         math='5G NCI read successfully; no mapped gNB match found.';
+       }
      }
    }catch(e){}
  }
@@ -3236,8 +3292,8 @@ function identifyFromScan(fields){
  <div class="label">LTE/5G</div><div>${esc(radio)}</div>
  <div class="label">Band</div><div>${esc(radio==='5G'?(sanitizeNrBand(fields.band)||'Unknown'):(fields.band||rec?.bands||'Unknown'))}</div>
  <div class="label">Bandwidth</div><div>${esc(fields.bw||rec?.bandwidth||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(radio==='5G'?'Unknown':(sid||'Unknown'))}</div>
- <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(radio==='5G'?'Unknown':(local||'Unknown'))}</div>
+ <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}</div>
+ <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(local||'Unknown')}</div>
  <div class="label">Cell ID/NCI</div><div>${esc(raw||'Unknown')}</div>
  <div class="label">PCI</div><div>${esc(fields.pci||'Unknown')}</div>
  <div class="label">TAC</div><div>${esc(fields.tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
@@ -3386,7 +3442,12 @@ function mergeScanFields(primary,secondary){
  if(x.cell){
    try{
      const n=BigInt(x.cell);
-     if(x.radio==='5G'){x.sid='';x.local='';}
+     if(x.radio==='5G'){
+       const d=derive5gFromRegistry(x.cell,x.carrier,x.plmn);
+       x.sid=d.matched?d.gNB:'';
+       x.local=d.matched?d.local:'';
+       x.gnbLocalBits=d.matched?d.bits:null;
+     }
      else{x.sid=(n/256n).toString();x.local=(n%256n).toString();}
    }catch(e){}
  }
@@ -3793,10 +3854,108 @@ function safe5gIdentifierMath(cell){
  if(!id)return {gNB:'',local:''};
  return {gNB:'',local:''};
 }
+
+function towerRecordId(r){
+ return String(r?.eNB||r?.gNB||'').trim();
+}
+function allTowerRecords(){
+ return DB && Array.isArray(DB.records) ? DB.records : [];
+}
+function matchRecordByExactCell(cell,carrier,radio,plmn){
+ const raw=String(cell||'').trim();
+ if(!raw)return null;
+ const hits=allTowerRecords().filter(r=>{
+   const same=[r.cell_id,r.nci,r.cellId,r.NCI].some(v=>String(v||'').trim()===raw);
+   if(!same)return false;
+   if(carrier && String(r.carrier||'')!==String(carrier))return false;
+   if(radio && String(r.radio||'').toUpperCase()!==String(radio).toUpperCase())return false;
+   if(plmn && r.plmn && String(r.plmn)!==String(plmn))return false;
+   return true;
+ });
+ return hits.length===1 ? hits[0] : null;
+}
+function matchRecordByExactTowerId(id,carrier,radio,plmn){
+ const raw=String(id||'').trim();
+ if(!raw)return null;
+ const hits=allTowerRecords().filter(r=>{
+   if(towerRecordId(r)!==raw)return false;
+   if(carrier && String(r.carrier||'')!==String(carrier))return false;
+   if(radio && String(r.radio||'').toUpperCase()!==String(radio).toUpperCase())return false;
+   if(plmn && r.plmn && String(r.plmn)!==String(plmn))return false;
+   return true;
+ });
+ return hits.length===1 ? hits[0] : null;
+}
+function resolveScanFromEntireRegistry(fields){
+ const plmn=String(fields?.plmn||'').trim();
+ const radio=String(fields?.radio||'LTE').toUpperCase();
+ const cell=String(fields?.cell||'').trim();
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+
+ // 1. Exact Cell ID/NCI across every registry record wins.
+ let rec=matchRecordByExactCell(cell,carrier,radio,plmn);
+ if(rec){
+   return {record:rec,id:towerRecordId(rec),local:String(rec.local_cell||rec.sector||'').trim(),source:'exact-cell'};
+ }
+
+ // 2. LTE deterministic ECI split, then exact eNB match across entire registry.
+ if(radio==='LTE' && /^\d+$/.test(cell)){
+   try{
+     const n=BigInt(cell),id=(n/256n).toString(),local=(n%256n).toString();
+     rec=matchRecordByExactTowerId(id,carrier,'LTE',plmn);
+     if(rec)return {record:rec,id,local,source:'derived-lte'};
+   }catch(e){}
+ }
+
+ // 3. 5G NCI: test every valid NR gNB-ID length. Only accept a candidate
+ // that maps to exactly one gNB already present in the complete registry.
+ if(radio==='5G' && /^\d+$/.test(cell)){
+   try{
+     const n=BigInt(cell),matches=[];
+     for(let localBits=4;localBits<=14;localBits++){
+       const div=1n<<BigInt(localBits);
+       const id=(n/div).toString(),local=(n%div).toString();
+       const rr=matchRecordByExactTowerId(id,carrier,'5G',plmn);
+       if(rr)matches.push({record:rr,id,local,source:'derived-5g',localBits});
+     }
+     // Deduplicate same physical registry record if needed.
+     const uniq=[];
+     const seen=new Set();
+     for(const m of matches){
+       const k=towerRecordId(m.record)+'|'+m.localBits;
+       if(!seen.has(k)){seen.add(k);uniq.push(m);}
+     }
+     if(uniq.length===1)return uniq[0];
+   }catch(e){}
+ }
+
+ // 4. Explicit supplied tower ID can match, but never use geographic proximity.
+ if(fields?.sid){
+   rec=matchRecordByExactTowerId(fields.sid,carrier,radio,plmn);
+   if(rec)return {record:rec,id:String(fields.sid),local:String(fields.local||''),source:'exact-id'};
+ }
+
+ return {record:null,id:'',local:'',source:'unmapped'};
+}
 function identifyFromScan(fields){
  fields=enrichSparseLteScan(fields);
-
  if(!DB)return;
+
+ const resolution=resolveScanFromEntireRegistry(fields);
+ if(resolution.record){
+   fields.sid=resolution.id||fields.sid||'';
+   fields.local=resolution.local||fields.local||'';
+   fields._resolvedRecord=resolution.record;
+   fields._resolutionSource=resolution.source;
+ }else{
+   fields._resolvedRecord=null;
+   fields._resolutionSource='unmapped';
+   if(String(fields.radio||'').toUpperCase()==='5G'){
+     fields.sid='';
+     fields.local='';
+   }
+ }
+
  const plmn=fields.plmn||'', radio=fields.radio||'LTE', raw=fields.cell||'', sid=fields.sid||'';
 
  if(!plmn || !raw || !sid){
@@ -3826,8 +3985,8 @@ function identifyFromScan(fields){
    }[overall];
 
    document.getElementById('scanIdentity').innerHTML=`<div class="card result unknown">
-    <h2>Signal Quality — Tower ID Incomplete</h2>
-    <div class="small muted" style="margin-bottom:10px">Missing ${esc(missing.join(', '))}. Tower identification is incomplete, but the measured radio quality can still be analyzed.</div>
+    <h2>${radio==='5G'&&raw?'5G Connection — Tower Unmapped':'Signal Quality — Tower ID Incomplete'}</h2>
+    <div class="small muted" style="margin-bottom:10px">${radio==='5G'&&raw?'5G NCI read successfully. No exact matching gNB is mapped in the full registry yet.':`Missing ${esc(missing.join(', '))}. Tower identification is incomplete.`} The measured radio quality can still be analyzed.</div>
     <div style="margin-top:8px"><b>Signal: ${icon} ${overall}</b></div>
     <div class="scan-metric-breakdown" style="margin-top:10px;display:grid;gap:8px">
       <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>RSRP — Signal Strength</b><div class="small" style="margin-top:3px">${fields.rsrp?`${rr[1]} <b>${esc(rr[0])}: ${esc(fields.rsrp)} dBm</b><br>Measures how strongly the tower’s signal reaches your phone.<br><b>Effect:</b> ${esc(scanMetricExperience('rsrp',rr[0]))}`:'⚪ <b>Unknown</b><br>Signal strength could not be measured from this scan.'}</div></div>
@@ -3841,9 +4000,9 @@ function identifyFromScan(fields){
  }
 
  const carrier=DB.plmns[plmn]||'Unknown';
- const rec=(typeof findExistingScanTower==='function')
+ const rec=fields._resolvedRecord || ((typeof findExistingScanTower==='function')
    ? findExistingScanTower(carrier,radio,sid)
-   : DB.records.find(r=>r.carrier===carrier&&r.radio===radio&&String(r.eNB||r.gNB)===String(sid));
+   : DB.records.find(r=>r.carrier===carrier&&r.radio===radio&&String(r.eNB||r.gNB)===String(sid)));
 
  // Automatic band enrichment is allowed ONLY for a real uploaded/pasted image OCR scan.
  // Manual edits to the scan fields do not change the saved Registry band list.
@@ -3912,8 +4071,16 @@ function identifyFromScan(fields){
      const e=n/256n,s=n%256n,rev=e*256n+s;
      math=`${raw} // 256 = ${e}, remainder ${s}. Reverse: ${e} × 256 + ${s} = ${rev} ${(String(e)===sid&&rev===n)?'✅':'❌'}`;
    }else{
-     const g=n/4096n,l=n%4096n,rev=g*4096n+l;
-     math=`Assumed 12-bit split ?: ${raw} // 4096 = ${g}, remainder ${l}. Reverse: ${g} × 4096 + ${l} = ${rev} ${(String(g)===sid&&rev===n)?'✅':'❌'}`;
+     if(fields._resolutionSource==='derived-5g' && sid){
+       const localBits=resolution.localBits;
+       const div=1n<<BigInt(localBits);
+       const rev=BigInt(sid)*div+BigInt(local||0);
+       math=`Registry-backed 5G split: ${raw} // 2^${localBits} = ${sid}, remainder ${local}. Reverse: ${rev} ${rev===n?'✅':'❌'}`;
+     }else if(fields._resolutionSource==='exact-cell' && sid){
+       math=`Exact NCI match in full registry → gNB ${sid}${local?`, local cell ${local}`:''}.`;
+     }else{
+       math='5G NCI read successfully; no exact registry-backed gNB match found.';
+     }
    }
  }catch(e){}
 
@@ -3933,7 +4100,7 @@ function identifyFromScan(fields){
  <div class="label">LTE/5G</div><div>${esc(radio)}</div>
  <div class="label">Band</div><div>${esc(radio==='5G'?(sanitizeNrBand(fields.band)||'Unknown'):(fields.band||rec?.bands||'Unknown'))}</div>
  <div class="label">Bandwidth</div><div>${esc(fields.bw||rec?.bandwidth||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(radio==='5G'?'Unknown':(sid||'Unknown'))}</div>
+ <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}</div>
  <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(radio==='5G'?'Unknown':(fields.local||'Unknown'))}</div>
  <div class="label">Cell ID/NCI</div><div>${esc(raw)}</div>
  <div class="label">PCI</div><div>${esc(fields.pci||'Unknown')}</div>
@@ -4328,7 +4495,11 @@ function refreshFromScanInputs(){
    try{
      const n=BigInt(x.cell);
      if(x.radio==='5G'){
-       x.sid='';x.local='';x.band=sanitizeNrBand(x.band);
+       x.band=sanitizeNrBand(x.band);
+       const d=derive5gFromRegistry(x.cell,x.carrier,x.plmn);
+       x.sid=d.matched?d.gNB:'';
+       x.local=d.matched?d.local:'';
+       x.gnbLocalBits=d.matched?d.bits:null;
      }else{
        x.sid=(n/256n).toString();x.local=(n%256n).toString();
      }
@@ -4451,7 +4622,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 9';
+  const BUILD='Current 11';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

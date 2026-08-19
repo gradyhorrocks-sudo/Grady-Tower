@@ -464,7 +464,11 @@
       "bands": "n25",
       "bandwidth": "10 MHz",
       "status": "confirmed",
-      "notes": ""
+      "notes": "Exact NCI 7691784215 confirmed from scan; local cell 23, PCI 579.",
+      "nci": "7691784215",
+      "cell_id": "7691784215",
+      "local_cell": "23",
+      "pci": "579"
     },
     {
       "carrier": "T-Mobile",
@@ -474,7 +478,10 @@
       "bands": "n41",
       "bandwidth": "",
       "status": "confirmed",
-      "notes": ""
+      "notes": "",
+      "nci": "7632572719",
+      "cell_id": "7632572719",
+      "local_cell": "303"
     },
     {
       "carrier": "T-Mobile",

@@ -6,7 +6,7 @@
     "310410": "AT&T",
     "311480": "Verizon",
     "310020": "Union Wireless",
-    "31220": "Union Wireless"
+    "31020": "Union Wireless"
   },
   "rules": {
     "strata_tac": {
@@ -1761,7 +1761,8 @@
       "bands": "B12",
       "bandwidth": "",
       "status": "confirmed",
-      "notes": ""
+      "notes": "",
+      "plmn": "310020"
     },
     {
       "carrier": "Union Wireless",
@@ -1771,7 +1772,8 @@
       "bands": "B12",
       "bandwidth": "",
       "status": "confirmed",
-      "notes": ""
+      "notes": "",
+      "plmn": "310020"
     },
     {
       "carrier": "Union Wireless",
@@ -1781,7 +1783,8 @@
       "bands": "B12",
       "bandwidth": "",
       "status": "confirmed",
-      "notes": ""
+      "notes": "",
+      "plmn": "310020"
     },
     {
       "carrier": "AT&T",
@@ -2392,6 +2395,69 @@
       "status": "confirmed",
       "bands": "",
       "notes": "User-confirmed site name."
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1298",
+      "site": "Burnt Hill / Evanston Wyoming",
+      "bands": "B2 B4 B12",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "10298",
+      "site": "Burnt Hill / Evanston Wyoming",
+      "bands": "B2 B4 B5 B12 B17",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1068",
+      "site": "Rex Peak Utah",
+      "bands": "B12",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1064",
+      "site": "Bear River City / State Highway 150 South Wyoming",
+      "bands": "B12",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1261",
+      "site": "Fort Bridger Wyoming / KBVZ-FM",
+      "bands": "B12 B17",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "1267",
+      "site": "Dwight D. Eisenhower Highway Wyoming",
+      "bands": "B2 B4 B17",
+      "status": "confirmed"
+    },
+    {
+      "carrier": "Union Wireless",
+      "plmn": "310020",
+      "radio": "LTE",
+      "eNB": "10267",
+      "site": "Dwight D. Eisenhower Highway Wyoming",
+      "bands": "B2 B4 B5 B12 B48",
+      "status": "confirmed"
     }
   ]
 }

@@ -1592,8 +1592,8 @@ function carrierNameFromPlmn(plmn){
    '312290':'STRATA Networks',
    '310410':'AT&T',
    '311480':'Verizon',
-   '310020':'Union Wireless',
-   '31220':'Union Wireless'
+   '310020':'Union Wireless','31020':'Union Wireless',
+   '310020':'Union Wireless'
  };
  return map[p]||'custom';
 }
@@ -3476,6 +3476,75 @@ function valueAcrossFromLabel(rows,labelRegex,valueRegex){
  return '';
 }
 
+
+function extractHotspotLteDiagnostics(text){
+ const raw=String(text||'').replace(/\r/g,'');
+ if(!/(?:4G\s*LTE\s*Network|Network\s*Operator|Signal\s*Strength\s*\(RSRP\))/i.test(raw)){
+   return {};
+ }
+
+ function after(labelRe){
+   const lines=raw.split(/\n/).map(x=>x.trim()).filter(Boolean);
+   for(let i=0;i<lines.length;i++){
+     if(labelRe.test(lines[i])){
+       // First try a value on the same line.
+       const same=lines[i].replace(labelRe,'').replace(/^[:\s-]+/,'').trim();
+       if(same)return same;
+       // This device UI usually puts the value on the next line.
+       if(i+1<lines.length)return lines[i+1].trim();
+     }
+   }
+   return '';
+ }
+
+ const operator=after(/^Network\s*Operator\s*:?$/i);
+ const rsrpRaw=after(/^Signal\s*Strength\s*\(RSRP\)\s*:?$/i);
+ const snrRaw=after(/^SNR\s*:?$/i);
+ const bandRaw=after(/^Band\s*:?$/i);
+ const roamingRaw=after(/^Roaming\s*:?$/i);
+ const cellRaw=after(/^Cell\s*ID\s*:?$/i);
+ const status=after(/^Status\s*:?$/i);
+
+ const cell=normalizeNum(cellRaw);
+ const bandNum=String(bandRaw||'').match(/\b(\d{1,3})\b/);
+ const rsrp=String(rsrpRaw||'').match(/-?\d{2,3}(?:\.\d+)?/);
+ const snr=String(snrRaw||'').match(/-?\d{1,3}(?:\.\d+)?/);
+
+ let carrier='';
+ let plmn='';
+ if(/strata/i.test(operator)){
+   carrier='STRATA Networks';
+   plmn='312290';
+ }else if(/t-?mobile/i.test(operator)){
+   carrier='T-Mobile';
+   plmn='310260';
+ }else if(/union/i.test(operator)){
+   carrier='Union Wireless';
+   plmn='310020';
+ }else if(/verizon/i.test(operator)){
+   carrier='Verizon';
+ }else if(/at&t|att/i.test(operator)){
+   carrier='AT&T';
+   plmn='310410';
+ }else if(operator){
+   carrier=operator;
+ }
+
+ const out={
+   _hotspotFormat:true,
+   radio:'LTE',
+   carrier,
+   plmn,
+   cell,
+   band:bandNum?'B'+bandNum[1]:'',
+   rsrp:rsrp?rsrp[0]:'',
+   snr:snr?snr[0]:'',
+   roaming:/\byes\b/i.test(roamingRaw),
+   _networkStatus:status,
+   _networkOperator:operator
+ };
+ return out;
+}
 function extractDiagnosticTextLines(text){
  const lines=String(text||'').replace(/\r/g,'').split('\n').map(x=>x.trim()).filter(Boolean);
  const out={plmn:'',radio:'',cell:'',band:'',bw:'',pci:'',tac:'',rsrp:'',rsrq:'',snr:''};
@@ -5296,6 +5365,11 @@ function maintainDuplicateDualRadioBadge(fields){
  setTimeout(()=>{try{obs.disconnect();}catch(e){}},2000);
 }
 function fillScanResults(x,text){
+ if(x?._hotspotFormat){
+   x.radio='LTE';
+   if(x.band && !/^B/i.test(x.band))x.band='B'+String(x.band).replace(/\D/g,'');
+ }
+
  x._ocrText=String(text||'');
  const dual=mergeDualRadioStats(x?._dualRadioSpatial,parseDualRadioSections(text||''));
  if(dual.capabilities){
@@ -5502,6 +5576,7 @@ runOcrBtn.addEventListener('click',async()=>{
    },{blocks:true,tsv:true});
    const d1=r1?.data||{};
    let fields=mergeScanFields(extractScanFieldsSpatial(d1),extractDiagnosticTextLines(d1.text||''));
+   fields=mergeScanFields(fields,extractHotspotLteDiagnostics(d1.text||''));
    let dualSpatial=extractDualRadioSpatial(d1);
 
    // Always do a second pass on the original. Merge whichever pass reads each row best.
@@ -5511,6 +5586,7 @@ runOcrBtn.addEventListener('click',async()=>{
    const d2=r2?.data||{};
    fields=mergeScanFields(fields,extractScanFieldsSpatial(d2));
    fields=mergeScanFields(fields,extractDiagnosticTextLines(d2.text||''));
+   fields=mergeScanFields(fields,extractHotspotLteDiagnostics(d2.text||''));
    dualSpatial=mergeDualRadioStats(dualSpatial,extractDualRadioSpatial(d2));
    fields._dualRadioSpatial=dualSpatial;
 
@@ -5534,7 +5610,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 30';
+  const BUILD='Current 33';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

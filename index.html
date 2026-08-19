@@ -4006,6 +4006,26 @@ function resolveKnownLteFromAnyDualRadioScan(fields, rawText){
  }
 }
 
+
+function knownLteSiteSummary(fields,rawText){
+ const c=resolveKnownLteFromAnyDualRadioScan(fields,rawText);
+ if(!c)return '';
+
+ if(c.record){
+   const site=String(c.record.site||'Unknown').trim();
+   return `<div class="notice lte-still-known" style="margin-top:12px;border:2px solid #22c55e">
+     <b>✅ LTE site is still known:</b>
+     The 5G tower may be unmapped, but the LTE connection in this same screenshot resolves to
+     <b>${esc(site)}</b> — eNB ${esc(c.id)}, sector ${esc(c.local)}, LTE Cell ID ${esc(c.cell)}.
+   </div>`;
+ }
+
+ return `<div class="notice lte-still-known" style="margin-top:12px">
+   <b>LTE side detected:</b>
+   eNB ${esc(c.id)}, sector ${esc(c.local)}, LTE Cell ID ${esc(c.cell)}.
+   That LTE eNB is not mapped yet.
+ </div>`;
+}
 function knownLteAnchorNotice(fields,rawText){
  const c=resolveKnownLteFromAnyDualRadioScan(fields,rawText);
  if(!c)return '';
@@ -4203,6 +4223,7 @@ function identifyFromScan(fields){
 
    document.getElementById('scanIdentity').innerHTML=`<div class="card result unknown">
     <h2>${radio==='5G'&&raw?'5G Connection — Tower Unmapped':'Signal Quality — Tower ID Incomplete'}</h2>
+    ${radio==='5G'?knownLteSiteSummary(fields,fields._ocrText||''):''}
     <div class="small muted" style="margin-bottom:10px">${radio==='5G'&&raw?'5G NCI read successfully. The gNB/local cell were derived, but that exact gNB is not mapped in the full registry yet.':`Missing ${esc(missing.join(', '))}. Tower identification is incomplete.`} The measured radio quality can still be analyzed.</div>
     <div style="margin-top:8px"><b>Signal: ${icon} ${overall}</b></div>
     <div class="scan-metric-breakdown" style="margin-top:10px;display:grid;gap:8px">
@@ -4214,6 +4235,7 @@ function identifyFromScan(fields){
     <div class="notice" style="margin-top:10px"><b>Tower not identified yet.</b> The app will not substitute TAC, PCI, or another number for Cell ID/NCI.</div>
     ${companionRadioNotice(fields,fields._ocrText||'')}
     ${knownLteAnchorNotice(fields,fields._ocrText||'')}
+ ${radio==='5G'&&!rec?knownLteSiteSummary(fields,fields._ocrText||''):''}
    </div>`;
    return;
  }
@@ -4845,7 +4867,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 15';
+  const BUILD='Current 16';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

@@ -3887,7 +3887,76 @@ function matchRecordByExactTowerId(id,carrier,radio,plmn){
  return hits.length===1 ? hits[0] : null;
 }
 
-function resolveCompanionRadioFromSameScan(fields){
+
+function collectPlausibleCellIdsFromRawText(rawText){
+ const t=String(rawText||'').replace(/\u2212/g,'-');
+ const vals=[];
+ // Prefer values appearing on Cell ID / NCI rows.
+ const rowRe=/(?:Cell\s*Id|Cell\s*ID|NCI)\s*:?\s*(\d{7,12})/ig;
+ let m;
+ while((m=rowRe.exec(t))){
+   if(!vals.includes(m[1]))vals.push(m[1]);
+ }
+ // OCR sometimes destroys row alignment. As a fallback, inspect all 7-12 digit tokens.
+ if(vals.length<2){
+   for(const x of (t.match(/\b\d{7,12}\b/g)||[])){
+     if(!vals.includes(x))vals.push(x);
+   }
+ }
+ return vals;
+}
+
+function resolveCompanionFromRawCandidates(fields,rawText){
+ const currentRadio=String(fields?.radio||'').toUpperCase();
+ const primary=String(fields?.cell||'').trim();
+ const plmn=String(fields?.plmn||'').trim();
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+ const text=String(rawText||'');
+ const candidates=collectPlausibleCellIdsFromRawText(text).filter(v=>v!==primary);
+ const hits=[];
+
+ if(currentRadio==='5G' && /\bLTE\b/i.test(text)){
+   for(const cell of candidates){
+     if(!/^\d+$/.test(cell))continue;
+     try{
+       const n=BigInt(cell),enb=(n/256n).toString(),local=(n%256n).toString();
+       let rec=matchRecordByExactCell(cell,carrier,'LTE',plmn);
+       if(!rec)rec=matchRecordByExactTowerId(enb,carrier,'LTE',plmn);
+       if(!rec)rec=matchRecordByExactTowerId(enb,carrier,'LTE','');
+       if(rec)hits.push({record:rec,radio:'LTE',id:enb,cell,local,source:'raw-derived-companion-lte'});
+     }catch(e){}
+   }
+ }
+
+ if(currentRadio==='LTE' && /\b5G\b/i.test(text)){
+   for(const cell of candidates){
+     let rec=matchRecordByExactCell(cell,carrier,'5G',plmn);
+     if(rec){
+       hits.push({record:rec,radio:'5G',id:towerRecordId(rec),cell,local:String(rec.local_cell||''),source:'raw-exact-companion-5g'});
+       continue;
+     }
+     if(!/^\d+$/.test(cell))continue;
+     try{
+       const n=BigInt(cell);
+       for(let localBits=4;localBits<=14;localBits++){
+         const div=1n<<BigInt(localBits);
+         const g=(n/div).toString(),local=(n%div).toString();
+         const rr=matchRecordByExactTowerId(g,carrier,'5G',plmn)||matchRecordByExactTowerId(g,carrier,'5G','');
+         if(rr)hits.push({record:rr,radio:'5G',id:g,cell,local,source:'raw-derived-companion-5g',localBits});
+       }
+     }catch(e){}
+   }
+ }
+
+ // Deduplicate by radio + exact tower ID + cell. Ambiguity means do not claim a site.
+ const uniq=[],seen=new Set();
+ for(const h of hits){
+   const k=[h.radio,h.id,h.cell].join('|');
+   if(!seen.has(k)){seen.add(k);uniq.push(h);}
+ }
+ return uniq.length===1 ? uniq[0] : null;
+}
+function resolveCompanionRadioFromSameScan(fields,rawText){
  const dual=fields?.dualRadioStats;
  if(!dual)return null;
 
@@ -3937,16 +4006,18 @@ function resolveCompanionRadioFromSameScan(fields){
      }catch(e){}
    }
  }
+ const rawMatch=resolveCompanionFromRawCandidates(fields,rawText||fields?._ocrText||'');
+ if(rawMatch)return rawMatch;
  return null;
 }
 
-function companionRadioNotice(fields){
- const c=resolveCompanionRadioFromSameScan(fields);
+function companionRadioNotice(fields,rawText){
+ const c=resolveCompanionRadioFromSameScan(fields,rawText||fields?._ocrText||'');
  if(!c?.record)return '';
  const site=String(c.record.site||'Unknown').trim();
  const idLabel=c.radio==='LTE'?'eNB':'gNB';
- return `<div class="notice companion-radio-match" style="margin-top:10px">
-   <b>Known on ${esc(c.radio)}:</b> The companion ${esc(c.radio)} connection in this same screenshot resolves to
+ return `<div class="notice companion-radio-match" style="margin-top:10px;border:2px solid #22c55e">
+   <b>✅ This site exists in ${esc(c.radio)}:</b> The companion ${esc(c.radio)} connection in this same screenshot resolves to
    <b>${esc(site)}</b> (${idLabel} ${esc(c.id)}).
    The current ${esc(String(fields.radio||'').toUpperCase())} identifier is not mapped yet, but the other radio side is already in the registry.
  </div>`;
@@ -4060,7 +4131,7 @@ function identifyFromScan(fields){
     </div>
     <div class="notice scan-experience" style="margin-top:10px;padding:10px 12px"><b>Overall Expected Experience</b><div class="small" style="margin-top:5px;line-height:1.5"><div><b>📞 Calls:</b> ${esc(exp[0])}</div><div><b>🎬 Video:</b> ${esc(exp[1])}</div><div><b>🌐 Data:</b> ${esc(exp[2])}</div></div></div>
     <div class="notice" style="margin-top:10px"><b>Tower not identified yet.</b> The app will not substitute TAC, PCI, or another number for Cell ID/NCI.</div>
-    ${companionRadioNotice(fields)}
+    ${companionRadioNotice(fields,fields._ocrText||'')}
    </div>`;
    return;
  }
@@ -4457,6 +4528,7 @@ function prepareUnknownTowerFromScan(fields){
  },180);
 }
 function fillScanResults(x,text){
+ x._ocrText=String(text||'');
  const dual=parseDualRadioSections(text||'');
  if(dual.capabilities){
    x.capabilities=dual.capabilities;
@@ -4688,7 +4760,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 12';
+  const BUILD='Current 13';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

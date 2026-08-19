@@ -3313,6 +3313,7 @@ function identifyFromScan(fields){
   <div><b>🌐 Data:</b> ${overall==='Excellent'?'Fast, responsive, and consistent.':overall==='Good'?'Reliable speeds and responsive browsing.':overall==='Fair'?'Usable, but speeds may vary.':overall==='Poor'?'Slower, inconsistent speeds and more lag.':overall==='No Signal'?'Data service is not expected to be usable.':'Not enough signal data.'}</div>
  </div>
 </div>
+ ${radio==='5G'?forcedKnownLteBanner(fields):''}
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  ${rec?.notes?'<div class="small" style="margin-top:8px">'+esc(rec.notes)+'</div>':''}
@@ -4215,6 +4216,23 @@ function directKnownLteNoticeFromRaw(fields, rawText){
  }
  return '';
 }
+
+function forcedKnownLteBanner(fields){
+ const raw=String(fields?._ocrText||'');
+ const c=resolveKnownLteFromAnyDualRadioScan(fields,raw)
+      || resolveCompanionRadioFromSameScan(fields,raw)
+      || resolveCompanionFromRawCandidates(fields,raw);
+
+ if(!c || c.radio!=='LTE' || !c.record)return '';
+
+ const site=String(c.record.site||'Unknown').trim();
+ return `<div class="notice forced-known-lte-banner" style="margin:14px 0;border:3px solid #22c55e">
+   <b>✅ This site exists in LTE:</b>
+   The LTE connection in this same screenshot resolves to
+   <b>${esc(site)}</b> (eNB ${esc(c.id)}${c.local?`, sector ${esc(c.local)}`:''}).
+   <br><b>The 5G side is not mapped yet, but the LTE site is already known in the registry.</b>
+ </div>`;
+}
 function identifyFromScan(fields){
  fields=enrichSparseLteScan(fields);
  if(!DB)return;
@@ -4417,6 +4435,7 @@ function identifyFromScan(fields){
      <div><b>🌐 Data:</b> ${esc(dataText)}</div>
    </div>
  </div>
+ ${radio==='5G'?forcedKnownLteBanner(fields):''}
  <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
  
  </div>`;
@@ -4911,7 +4930,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 17';
+  const BUILD='Current 18';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

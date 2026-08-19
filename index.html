@@ -4022,6 +4022,17 @@ function companionRadioNotice(fields,rawText){
    The current ${esc(String(fields.radio||'').toUpperCase())} identifier is not mapped yet, but the other radio side is already in the registry.
  </div>`;
 }
+
+function derive5g12Bit(nci){
+ const raw=String(nci||'').trim();
+ if(!/^\d+$/.test(raw))return {gNB:'',local:''};
+ try{
+   const n=BigInt(raw);
+   return {gNB:(n/4096n).toString(),local:(n%4096n).toString()};
+ }catch(e){
+   return {gNB:'',local:''};
+ }
+}
 function resolveScanFromEntireRegistry(fields){
  const plmn=String(fields?.plmn||'').trim();
  const radio=String(fields?.radio||'LTE').toUpperCase();
@@ -4087,8 +4098,10 @@ function identifyFromScan(fields){
    fields._resolvedRecord=null;
    fields._resolutionSource='unmapped';
    if(String(fields.radio||'').toUpperCase()==='5G'){
-     fields.sid='';
-     fields.local='';
+     const d=derive5g12Bit(fields.cell);
+     fields.sid=d.gNB;
+     fields.local=d.local;
+     fields._resolutionSource=d.gNB?'derived-5g-12bit-unmapped':'unmapped';
    }
  }
 
@@ -4122,7 +4135,7 @@ function identifyFromScan(fields){
 
    document.getElementById('scanIdentity').innerHTML=`<div class="card result unknown">
     <h2>${radio==='5G'&&raw?'5G Connection — Tower Unmapped':'Signal Quality — Tower ID Incomplete'}</h2>
-    <div class="small muted" style="margin-bottom:10px">${radio==='5G'&&raw?'5G NCI read successfully. No exact matching gNB is mapped in the full registry yet.':`Missing ${esc(missing.join(', '))}. Tower identification is incomplete.`} The measured radio quality can still be analyzed.</div>
+    <div class="small muted" style="margin-bottom:10px">${radio==='5G'&&raw?'5G NCI read successfully. The gNB/local cell were derived, but that exact gNB is not mapped in the full registry yet.':`Missing ${esc(missing.join(', '))}. Tower identification is incomplete.`} The measured radio quality can still be analyzed.</div>
     <div style="margin-top:8px"><b>Signal: ${icon} ${overall}</b></div>
     <div class="scan-metric-breakdown" style="margin-top:10px;display:grid;gap:8px">
       <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>RSRP — Signal Strength</b><div class="small" style="margin-top:3px">${fields.rsrp?`${rr[1]} <b>${esc(rr[0])}: ${esc(fields.rsrp)} dBm</b><br>Measures how strongly the tower’s signal reaches your phone.<br><b>Effect:</b> ${esc(scanMetricExperience('rsrp',rr[0]))}`:'⚪ <b>Unknown</b><br>Signal strength could not be measured from this scan.'}</div></div>
@@ -4215,8 +4228,11 @@ function identifyFromScan(fields){
        math=`Registry-backed 5G split: ${raw} // 2^${localBits} = ${sid}, remainder ${local}. Reverse: ${rev} ${rev===n?'✅':'❌'}`;
      }else if(fields._resolutionSource==='exact-cell' && sid){
        math=`Exact NCI match in full registry → gNB ${sid}${local?`, local cell ${local}`:''}.`;
+     }else if(fields._resolutionSource==='derived-5g-12bit-unmapped' && sid){
+       const g=BigInt(sid),l=BigInt(local||0),rev=g*4096n+l;
+       math=`5G 12-bit split: ${raw} // 4096 = gNB ${sid}, local cell ${local}. Reverse: ${sid} × 4096 + ${local} = ${rev} ${rev===n?'✅':'❌'} — gNB not mapped in registry.`;
      }else{
-       math='5G NCI read successfully; no exact registry-backed gNB match found.';
+       math='5G NCI read successfully; no registry match found.';
      }
    }
  }catch(e){}
@@ -4760,7 +4776,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 13';
+  const BUILD='Current 14';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

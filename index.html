@@ -3956,6 +3956,74 @@ function resolveCompanionFromRawCandidates(fields,rawText){
  }
  return uniq.length===1 ? uniq[0] : null;
 }
+
+function resolveKnownLteFromAnyDualRadioScan(fields, rawText){
+ const text=String(rawText||fields?._ocrText||'');
+ const plmn=String(fields?.plmn||'').trim();
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+
+ // Prefer the structured LTE section.
+ let lteCell=String(fields?.dualRadioStats?.lte?.cell||'').trim();
+
+ // If structure was lost, recover LTE Cell ID directly from the LTE portion of raw OCR.
+ if(!lteCell && /\bLTE\b/i.test(text)){
+   const section=extractSection(text,'LTE',null);
+   lteCell=parseNumericToken(sectionValue(section,'Cell\\s*Id|Cell\\s*ID'));
+ }
+
+ if(!/^\d+$/.test(lteCell))return null;
+
+ try{
+   const n=BigInt(lteCell);
+   const enb=(n/256n).toString();
+   const local=(n%256n).toString();
+
+   let rec=matchRecordByExactCell(lteCell,carrier,'LTE',plmn);
+   if(!rec)rec=matchRecordByExactTowerId(enb,carrier,'LTE',plmn);
+   if(!rec)rec=matchRecordByExactTowerId(enb,carrier,'LTE','');
+
+   if(rec){
+     return {
+       record:rec,
+       radio:'LTE',
+       id:enb,
+       cell:lteCell,
+       local,
+       source:'dual-radio-lte-anchor'
+     };
+   }
+
+   return {
+     record:null,
+     radio:'LTE',
+     id:enb,
+     cell:lteCell,
+     local,
+     source:'dual-radio-lte-unmapped'
+   };
+ }catch(e){
+   return null;
+ }
+}
+
+function knownLteAnchorNotice(fields,rawText){
+ const c=resolveKnownLteFromAnyDualRadioScan(fields,rawText);
+ if(!c)return '';
+
+ if(c.record){
+   const site=String(c.record.site||'Unknown').trim();
+   return `<div class="notice lte-anchor-match" style="margin-top:10px;border:2px solid #22c55e">
+     <b>✅ LTE site exists in registry:</b>
+     <b>${esc(site)}</b> — eNB ${esc(c.id)}, sector/local cell ${esc(c.local)}, LTE Cell ID ${esc(c.cell)}.
+     <br><b>This LTE site is known even if the 5G side has no NCI or is not mapped.</b>
+   </div>`;
+ }
+
+ return `<div class="notice" style="margin-top:10px">
+   <b>LTE anchor derived:</b> eNB ${esc(c.id)}, sector/local cell ${esc(c.local)}, LTE Cell ID ${esc(c.cell)}.
+   This LTE eNB is not yet mapped in the registry.
+ </div>`;
+}
 function resolveCompanionRadioFromSameScan(fields,rawText){
  const dual=fields?.dualRadioStats;
  if(!dual)return null;
@@ -4145,6 +4213,7 @@ function identifyFromScan(fields){
     <div class="notice scan-experience" style="margin-top:10px;padding:10px 12px"><b>Overall Expected Experience</b><div class="small" style="margin-top:5px;line-height:1.5"><div><b>📞 Calls:</b> ${esc(exp[0])}</div><div><b>🎬 Video:</b> ${esc(exp[1])}</div><div><b>🌐 Data:</b> ${esc(exp[2])}</div></div></div>
     <div class="notice" style="margin-top:10px"><b>Tower not identified yet.</b> The app will not substitute TAC, PCI, or another number for Cell ID/NCI.</div>
     ${companionRadioNotice(fields,fields._ocrText||'')}
+    ${knownLteAnchorNotice(fields,fields._ocrText||'')}
    </div>`;
    return;
  }
@@ -4776,7 +4845,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 14';
+  const BUILD='Current 15';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

@@ -3975,6 +3975,95 @@ function explicit5gBandFromSection(section){
  const firstToken=String(row[1]||'').trim().split(/\s{2,}|\t/)[0];
  return sanitizeNrBand(normalizeExplicitNrBandRowToken(firstToken));
 }
+
+function mergeRadioSectionValues(primary,secondary){
+ const a=primary||{},b=secondary||{};
+ const out={};
+ for(const k of ['band','bandwidth','cell','pci','rsrp','rsrq','snr']){
+   out[k]=String(a[k]||b[k]||'').trim();
+ }
+ return out;
+}
+
+function mergeDualRadioStats(primary,secondary){
+ const a=primary||{},b=secondary||{};
+ return {
+   capabilities:String(a.capabilities||b.capabilities||'').trim(),
+   five:mergeRadioSectionValues(a.five,b.five),
+   lte:mergeRadioSectionValues(a.lte,b.lte)
+ };
+}
+
+function extractDualRadioSpatial(ocrData){
+ const words=extractOcrWords(ocrData);
+ const rows=wordsToRows(words);
+ if(!rows.length)return {capabilities:'',five:{},lte:{}};
+
+ function txt(row){return rowText(row).replace(/\s+/g,' ').trim();}
+ function rowY(row){return Number(row?.cy||0);}
+ function findHeading(re){
+   return rows.findIndex(r=>re.test(txt(r)));
+ }
+
+ const fiveIdx=findHeading(/^\s*5G\s*$/i);
+ const lteIdx=findHeading(/^\s*LTE\s*$/i);
+
+ // If both headings aren't found spatially, do not guess section boundaries here.
+ if(fiveIdx<0 || lteIdx<0)return {capabilities:'',five:{},lte:{}};
+
+ const fiveY=rowY(rows[fiveIdx]),lteY=rowY(rows[lteIdx]);
+ const loFive=Math.min(fiveY,lteY),hiFive=Math.max(fiveY,lteY);
+
+ // In this diagnostic UI 5G appears above LTE. Constrain rows by vertical position.
+ const fiveRows=rows.filter(r=>rowY(r)>fiveY && rowY(r)<lteY);
+ const lteRows=rows.filter(r=>rowY(r)>lteY);
+
+ function across(sectionRows,labelRe,valueRe){
+   return valueAcrossFromLabel(sectionRows,labelRe,valueRe);
+ }
+ function num(v){return normalizeNum(v);}
+ function cleanMetric(v,unit){
+   return String(v||'').replace(new RegExp(unit,'ig'),'').replace(/\s+/g,'').trim();
+ }
+
+ function parseSection(sectionRows,radio){
+   let band='';
+   if(radio==='5G'){
+     const raw=across(sectionRows,/\bBand\b/i,/\b([nN]?\s*[0-9OoIl|!]{1,3})\b/);
+     band=sanitizeNrBand(normalize5gBandValueFromBandRow(raw));
+   }else{
+     band=across(sectionRows,/\bBand\b/i,/\b((?:B|b)?\s*\d{1,3})\b/).replace(/\s+/g,'');
+     if(band && !/^B/i.test(band))band='B'+band;
+   }
+
+   const cell=num(across(
+     sectionRows,
+     /(?:Cell\s*[I1l][dD]|Cell\s*ID|NCI|ECI|Cell\s*Identity)/i,
+     /\b([0-9OoIl|]{5,15})\b/
+   ));
+
+   const pci=num(across(sectionRows,/\bPCI\b/i,/\b([0-9OoIl|]{1,4})\b/));
+   const bandwidth=across(sectionRows,/\bBandwidth\b/i,/\b(\d{1,3}\s*MHz)\b/i);
+   const rsrp=cleanMetric(across(sectionRows,/\bRSRP\b/i,/(-?\s*\d{2,3}(?:\.\d+)?\s*(?:dBm)?)/i),'dBm');
+   const rsrq=cleanMetric(across(sectionRows,/\bRSRQ\b/i,/(-?\s*\d{1,3}(?:\.\d+)?\s*(?:dB)?)/i),'dB');
+   const snr=cleanMetric(across(sectionRows,/\b(?:SNR|SINR0?|SINR)\b/i,/(-?\s*\d{1,3}(?:\.\d+)?\s*(?:dB)?)/i),'dB');
+   return {band,bandwidth,cell,pci,rsrp,rsrq,snr};
+ }
+
+ // Capabilities can be anywhere above the 5G section.
+ let capabilities='';
+ for(const r of rows.slice(0,fiveIdx)){
+   const t=txt(r);
+   const m=t.match(/\b(SA\+NSA|NSA\+SA|NSA|SA)\b/i);
+   if(m){capabilities=m[1].toUpperCase();break;}
+ }
+
+ return {
+   capabilities,
+   five:parseSection(fiveRows,'5G'),
+   lte:parseSection(lteRows,'LTE')
+ };
+}
 function parseDualRadioSections(text){
  const caps=normalizeCapabilitiesFromOCR(text);
  const five=extractSection(text,'5G','LTE');
@@ -4459,36 +4548,57 @@ function dualRadioVerificationCard(fields){
 }
 
 function duplicateDualRadioCellStatus(fields){
- const raw=String(fields?._ocrText||'').replace(/\r/g,'');
- if(!raw)return '';
+ const dual=fields?.dualRadioStats||{};
+ const fiveCell=String(dual?.five?.cell||'').replace(/\D/g,'');
+ const lteCell=String(dual?.lte?.cell||'').replace(/\D/g,'');
+ if(!fiveCell || !lteCell || fiveCell!==lteCell)return '';
 
- const five=extractSection(raw,'5G','LTE');
- const lte=extractSection(raw,'LTE',null);
-
- function cellFromSection(section){
-   let v=parseNumericToken(sectionValue(section,'Cell\\s*Id|Cell\\s*ID|NCI|ECI'));
-   if(v)return String(v);
-   const m=String(section||'').match(/(?:Cell\s*[I1l][dD]|Cell\s*ID|NCI|ECI)\s*:?\s*([0-9OoIl|]{5,15})/i);
-   return m?normalizeNum(m[1]):'';
- }
-
- const fiveCell=cellFromSection(five);
- const lteCell=cellFromSection(lte);
-
- // User-defined rule for this exact duplicate-ID situation:
- // when both radio sections report the SAME Cell ID value, mark 5G valid
- // and LTE invalid. Do not let this depend on registry matching.
- if(fiveCell && lteCell && fiveCell===lteCell){
-   return `<div class="notice duplicate-dual-radio-status" style="margin:12px 0;border:3px solid #22c55e">
-     <div><b>✅ 5G</b> — use the 5G identification for this duplicate Cell ID scan.</div>
-     <div><b>❌ LTE</b> — do not use the duplicated LTE Cell ID for tower identification.</div>
-   </div>`;
- }
+ const plmn=String(fields?.plmn||'').replace(/\D/g,'');
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+ try{
+   const n=BigInt(lteCell), enb=(n/256n).toString(), sector=(n%256n).toString();
+   const rec=matchRecordByExactCell(lteCell,carrier,'LTE',plmn)
+          || matchRecordByExactTowerId(enb,carrier,'LTE',plmn)
+          || matchRecordByExactTowerId(enb,carrier,'LTE','');
+   if(rec){
+     return `<div class="notice duplicate-dual-radio-status" style="margin:12px 0;border:3px solid #22c55e">
+       <div><b>✅ LTE — ${esc(rec.site||'Known LTE site')}</b></div>
+       <div>Saved registry match: eNB ${esc(enb)}, sector ${esc(sector)}. <b>Classified as LTE because this tower exists in the saved LTE registry.</b></div>
+     </div>`;
+   }
+ }catch(e){}
  return '';
 }
+function applySavedRegistryRadioAuthority(fields){
+ const dual=fields?.dualRadioStats||{};
+ const plmn=String(fields?.plmn||'').replace(/\D/g,'');
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+ const lteCell=String(dual?.lte?.cell||'').replace(/\D/g,'');
+ if(!/^\d+$/.test(lteCell))return fields;
+ try{
+   const n=BigInt(lteCell), enb=(n/256n).toString(), sector=(n%256n).toString();
+   const rec=matchRecordByExactCell(lteCell,carrier,'LTE',plmn)
+          || matchRecordByExactTowerId(enb,carrier,'LTE',plmn)
+          || matchRecordByExactTowerId(enb,carrier,'LTE','');
+   if(!rec)return fields;
+   fields.radio='LTE'; fields.cell=lteCell; fields.sid=enb; fields.local=sector;
+   const lteBand=String(dual?.lte?.band||'').trim();
+   if(lteBand)fields.band=/^B/i.test(lteBand)?lteBand:'B'+lteBand.replace(/\D/g,'');
+   fields.bw=dual?.lte?.bandwidth||dual?.lte?.bw||fields.bw||'';
+   fields.pci=dual?.lte?.pci||fields.pci||'';
+   fields.rsrp=dual?.lte?.rsrp||fields.rsrp||'';
+   fields.rsrq=dual?.lte?.rsrq||fields.rsrq||'';
+   fields.snr=dual?.lte?.snr||fields.snr||'';
+   fields._registryRadioAuthority=true;
+   fields._registryRadioAuthorityRecord=rec;
+ }catch(e){}
+ return fields;
+}
+
 function identifyFromScan(fields){
  fields=enrichSparseLteScan(fields);
  if(!DB)return;
+ fields=applySavedRegistryRadioAuthority(fields);
 
  const resolution=resolveScanFromEntireRegistry(fields);
  if(resolution.record){
@@ -4999,9 +5109,78 @@ function renderRadioVerificationBadges(x){
    <b>${lteMark} LTE</b>${lteName}
  </div>`;
 }
+
+function parseDuplicateDualRadioCellIdsFromRaw(rawText){
+ const raw=String(rawText||'').replace(/\r/g,'');
+ const five=extractSection(raw,'5G','LTE');
+ const lte=extractSection(raw,'LTE',null);
+
+ function getCell(section){
+   let v=parseNumericToken(sectionValue(section,'Cell\\s*Id|Cell\\s*ID|NCI|ECI'));
+   if(v)return String(v);
+   const m=String(section||'').match(/(?:Cell\s*[I1l][dD]|Cell\s*ID|NCI|ECI)\s*:?\s*([0-9OoIl|]{5,15})/i);
+   return m?normalizeNum(m[1]):'';
+ }
+ return {fiveCell:getCell(five),lteCell:getCell(lte)};
+}
+
+function forceDuplicateDualRadioBadgeAfterRender(fields){
+ let fiveCell=String(fields?.dualRadioStats?.five?.cell||'').replace(/\D/g,'');
+ let lteCell=String(fields?.dualRadioStats?.lte?.cell||'').replace(/\D/g,'');
+
+ // Raw OCR remains a fallback only.
+ if(!fiveCell || !lteCell){
+   const raw=parseDuplicateDualRadioCellIdsFromRaw(fields?._ocrText||'');
+   fiveCell=fiveCell||String(raw.fiveCell||'').replace(/\D/g,'');
+   lteCell=lteCell||String(raw.lteCell||'').replace(/\D/g,'');
+ }
+
+ if(!fiveCell || !lteCell || fiveCell!==lteCell)return false;
+
+ let html='';
+ const plmn=String(fields?.plmn||'').replace(/\D/g,'');
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+ try{
+   const n=BigInt(lteCell),enb=(n/256n).toString(),sector=(n%256n).toString();
+   const rec=matchRecordByExactCell(lteCell,carrier,'LTE',plmn)
+          || matchRecordByExactTowerId(enb,carrier,'LTE',plmn)
+          || matchRecordByExactTowerId(enb,carrier,'LTE','');
+   if(!rec)return false;
+   html=`<div class="notice forced-duplicate-radio-badge" style="margin:12px 0;border:3px solid #22c55e">
+     <div><b>✅ LTE — ${esc(rec.site||'Known LTE site')}</b></div>
+     <div>Saved registry match: eNB ${esc(enb)}, sector ${esc(sector)}. <b>Classified as LTE because this tower exists in the saved LTE registry.</b></div>
+   </div>`;
+ }catch(e){return false;}
+
+ const target=document.getElementById('scanIdentity');
+ if(!target || !target.innerHTML.trim())return false;
+ if(target.querySelector('.forced-duplicate-radio-badge'))return true;
+
+ const h2=target.querySelector('.card.result h2')||target.querySelector('h2');
+ if(h2)h2.insertAdjacentHTML('afterend',html);
+ else target.insertAdjacentHTML('afterbegin',html);
+ return true;
+}
+
+function maintainDuplicateDualRadioBadge(fields){
+ const identity=document.getElementById('scanIdentity');
+ if(!identity)return;
+ forceDuplicateDualRadioBadgeAfterRender(fields);
+
+ let timer=null;
+ const obs=new MutationObserver(()=>{
+   clearTimeout(timer);
+   timer=setTimeout(()=>forceDuplicateDualRadioBadgeAfterRender(fields),0);
+ });
+ obs.observe(identity,{childList:true,subtree:true});
+
+ // The scan render is synchronous plus a few immediate DOM updates.
+ // Disconnect after 2 seconds to avoid keeping an unnecessary observer forever.
+ setTimeout(()=>{try{obs.disconnect();}catch(e){}},2000);
+}
 function fillScanResults(x,text){
  x._ocrText=String(text||'');
- const dual=parseDualRadioSections(text||'');
+ const dual=mergeDualRadioStats(x?._dualRadioSpatial,parseDualRadioSections(text||''));
  if(dual.capabilities){
    x.capabilities=dual.capabilities;
  }
@@ -5043,7 +5222,7 @@ function fillScanResults(x,text){
  document.getElementById('scanResults').classList.remove('hidden');
  // FINAL 5G BAND GUARD: run BEFORE rendering so explicit supported NR band survives to the live card.
  if(String(x.radio||'').toUpperCase()==='5G'){
-   const strictDual=parseDualRadioSections(text||'');
+   const strictDual=mergeDualRadioStats(x?._dualRadioSpatial,parseDualRadioSections(text||''));
    const explicit5gBand=explicit5gBandFromSection(extractSection(text||'','5G','LTE'));
    x.band=sanitizeNrBand(explicit5gBand || strictDual.five.band || x.band || '');
    x.bandwidth=strictDual.five.bandwidth || '';
@@ -5058,6 +5237,7 @@ function fillScanResults(x,text){
    }
  }
  identifyFromScan(x);
+ maintainDuplicateDualRadioBadge(x);
 
  
 }
@@ -5205,6 +5385,7 @@ runOcrBtn.addEventListener('click',async()=>{
    },{blocks:true,tsv:true});
    const d1=r1?.data||{};
    let fields=mergeScanFields(extractScanFieldsSpatial(d1),extractDiagnosticTextLines(d1.text||''));
+   let dualSpatial=extractDualRadioSpatial(d1);
 
    // Always do a second pass on the original. Merge whichever pass reads each row best.
    const r2=await Tesseract.recognize(f,'eng',{
@@ -5213,6 +5394,8 @@ runOcrBtn.addEventListener('click',async()=>{
    const d2=r2?.data||{};
    fields=mergeScanFields(fields,extractScanFieldsSpatial(d2));
    fields=mergeScanFields(fields,extractDiagnosticTextLines(d2.text||''));
+   dualSpatial=mergeDualRadioStats(dualSpatial,extractDualRadioSpatial(d2));
+   fields._dualRadioSpatial=dualSpatial;
 
    fields._fromImageScan=true;
    fillScanResults(fields,(d1.text||'')+'\n--- ORIGINAL PASS ---\n'+(d2.text||''));
@@ -5234,7 +5417,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 25';
+  const BUILD='Current 27';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

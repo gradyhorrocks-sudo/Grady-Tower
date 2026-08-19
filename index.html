@@ -3298,6 +3298,7 @@ function identifyFromScan(fields){
  <div class="label">PCI</div><div>${esc(fields.pci||'Unknown')}</div>
  <div class="label">TAC</div><div>${esc(fields.tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
  </div>
+ ${dualRadioVerificationCard(fields)}
  <div style="margin-top:12px"><b>Signal: ${icon} ${overall}</b></div>
  <div class="small">
  RSRP: ${fields.rsrp?`${rr[1]} ${esc(fields.rsrp)} dBm · ${rr[0]}`:'Unknown'}<br>
@@ -3305,9 +3306,7 @@ function identifyFromScan(fields){
  SNR/SINR: ${fields.snr?`${sr[1]} ${esc(fields.snr)} dB · ${sr[0]}`:'Unknown'}
  </div>
  ${experienceHtml}
- <div class="scan-experience" style="margin:10px 0 2px;
- try{document.getElementById('scanIdentity').insertAdjacentHTML('beforeend',renderRadioVerificationBadges(x));}catch(e){}
-padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#0f172a">
+ <div class="scan-experience" style="margin:10px 0 2px;padding:10px 12px;border:1px solid #334155;border-radius:10px;background:#0f172a">
  <div style="font-weight:800;margin-bottom:4px">Expected experience</div>
  <div class="small" style="line-height:1.5">
   <div><b>📞 Calls:</b> ${overall==='Excellent'?'Clear and stable.':overall==='Good'?'Clear and generally stable.':overall==='Fair'?'Should generally work, though stability may be reduced.':overall==='Poor'?'May become less stable as conditions worsen.':overall==='No Signal'?'The radio link is effectively unusable.':'Not enough signal data.'}</div>
@@ -4388,6 +4387,75 @@ function forcedKnownLteBanner(fields){
    <br><b>The 5G side is not mapped yet, but the LTE site is already known in the registry.</b>
  </div>`;
 }
+
+function dualRadioVerificationSummary(fields){
+ const dual=fields?.dualRadioStats||{};
+ const plmn=String(fields?.plmn||'').replace(/\D/g,'');
+ const carrier=(DB?.plmns?.[plmn])||String(fields?.carrier||'').trim()||'Unknown';
+
+ function exactLte(){
+   const cell=String(dual?.lte?.cell||'').replace(/\D/g,'');
+   if(!/^\d+$/.test(cell))return {present:false,ok:false,name:'',id:'',local:''};
+   try{
+     const n=BigInt(cell),id=(n/256n).toString(),local=(n%256n).toString();
+     let rec=matchRecordByExactCell(cell,carrier,'LTE',plmn);
+     if(!rec)rec=matchRecordByExactTowerId(id,carrier,'LTE',plmn);
+     if(!rec)rec=matchRecordByExactTowerId(id,carrier,'LTE','');
+     return {present:true,ok:!!rec,name:rec?String(rec.site||'Unknown'):'',id,local,cell};
+   }catch(e){return {present:true,ok:false,name:'',id:'',local:'',cell};}
+ }
+
+ function exact5g(){
+   const cell=String(dual?.five?.cell||fields?.cell||'').replace(/\D/g,'');
+   if(!/^\d+$/.test(cell))return {present:false,ok:false,name:'',id:'',local:''};
+
+   // If the live 5G result already resolved to a registry-backed record, trust that.
+   if(fields?._resolvedRecord && String(fields?._resolvedRecord?.radio||'').toUpperCase()==='5G'){
+     return {
+       present:true,ok:true,
+       name:String(fields._resolvedRecord.site||'Unknown'),
+       id:String(fields.sid||towerRecordId(fields._resolvedRecord)||''),
+       local:String(fields.local||''),
+       cell
+     };
+   }
+
+   // Otherwise perform the same full-registry 5G resolver used by the scanner.
+   const hit=resolveScanFromEntireRegistry({
+     ...fields,radio:'5G',cell,
+     band:dual?.five?.band||fields?.band||''
+   });
+   if(hit?.record){
+     return {
+       present:true,ok:true,
+       name:String(hit.record.site||'Unknown'),
+       id:String(hit.id||towerRecordId(hit.record)||''),
+       local:String(hit.local||''),
+       cell
+     };
+   }
+   return {present:true,ok:false,name:'',id:String(hit?.id||fields?.sid||''),local:String(hit?.local||fields?.local||''),cell};
+ }
+
+ return {five:exact5g(),lte:exactLte()};
+}
+
+function dualRadioVerificationCard(fields){
+ const v=dualRadioVerificationSummary(fields);
+ if(!v.five.present && !v.lte.present)return '';
+
+ const five=v.five.present
+   ? `<div><b>${v.five.ok?'✅':'❌'} 5G:</b> ${v.five.ok?esc(v.five.name):'not confirmed in registry'}${v.five.id?` — gNB ${esc(v.five.id)}`:''}</div>`
+   : '';
+
+ const lte=v.lte.present
+   ? `<div><b>${v.lte.ok?'✅':'❌'} LTE:</b> ${v.lte.ok?esc(v.lte.name):'not confirmed in registry'}${v.lte.id?` — eNB ${esc(v.lte.id)}, sector ${esc(v.lte.local)}`:''}</div>`
+   : '';
+
+ return `<div class="notice dual-radio-verification" style="margin:12px 0;border:2px solid #64748b">
+   ${five}${lte}
+ </div>`;
+}
 function identifyFromScan(fields){
  fields=enrichSparseLteScan(fields);
  if(!DB)return;
@@ -4439,12 +4507,11 @@ function identifyFromScan(fields){
 
    document.getElementById('scanIdentity').innerHTML=`<div class="card result unknown">
     <h2>${radio==='5G'&&raw?'5G Connection — Tower Unmapped':'Signal Quality — Tower ID Incomplete'}</h2>
+    ${dualRadioVerificationCard(fields)}
     ${radio==='5G'?knownLteSiteSummary(fields,fields._ocrText||''):''}
     <div class="small muted" style="margin-bottom:10px">${radio==='5G'&&raw?'5G NCI read successfully. The gNB/local cell were derived, but that exact gNB is not mapped in the full registry yet.':`Missing ${esc(missing.join(', '))}. Tower identification is incomplete.`} The measured radio quality can still be analyzed.</div>
     <div style="margin-top:8px"><b>Signal: ${icon} ${overall}</b></div>
-    <div class="scan-metric-breakdown" style="margin-top:10px;
- try{document.getElementById('scanIdentity').insertAdjacentHTML('beforeend',renderRadioVerificationBadges(x));}catch(e){}
-display:grid;gap:8px">
+    <div class="scan-metric-breakdown" style="margin-top:10px;display:grid;gap:8px">
       <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>RSRP — Signal Strength</b><div class="small" style="margin-top:3px">${fields.rsrp?`${rr[1]} <b>${esc(rr[0])}: ${esc(fields.rsrp)} dBm</b><br>Measures how strongly the tower’s signal reaches your phone.<br><b>Effect:</b> ${esc(scanMetricExperience('rsrp',rr[0]))}`:'⚪ <b>Unknown</b><br>Signal strength could not be measured from this scan.'}</div></div>
       <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>RSRQ — Signal Quality / Congestion</b><div class="small" style="margin-top:3px">${fields.rsrq?`${rq[1]} <b>${esc(rq[0])}: ${esc(fields.rsrq)} dB</b><br>Measures signal quality, interference, and network loading.<br><b>Effect:</b> ${esc(scanMetricExperience('rsrq',rq[0]))}`:'⚪ <b>Unknown</b><br>Interference or congestion impact cannot be determined.'}</div></div>
       <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a"><b>SNR/SINR — Signal Clarity</b><div class="small" style="margin-top:3px">${fields.snr?`${sr[1]} <b>${esc(sr[0])}: ${esc(fields.snr)} dB</b><br>Measures how much stronger the useful signal is than interference and noise.<br><b>Effect:</b> ${esc(scanMetricExperience('sinr',sr[0]))}`:'⚪ <b>Unknown</b><br>Signal clarity could not be measured from this scan.'}</div></div>
@@ -4570,9 +4637,7 @@ display:grid;gap:8px">
  <div class="label">TAC</div><div>${esc(fields.tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
  </div>
  <div style="margin-top:12px"><b>Signal: ${icon} ${overall}</b></div>
- <div class="scan-metric-breakdown" style="margin-top:10px;
- try{document.getElementById('scanIdentity').insertAdjacentHTML('beforeend',renderRadioVerificationBadges(x));}catch(e){}
-display:grid;gap:8px">
+ <div class="scan-metric-breakdown" style="margin-top:10px;display:grid;gap:8px">
   <div style="padding:9px 11px;border:1px solid #334155;border-radius:10px;background:#0f172a">
    <b>RSRP — Signal Strength</b>
    <div class="small" style="margin-top:3px">${fields.rsrp?`${rr[1]} <b>${esc(rr[0])}: ${esc(fields.rsrp)} dBm</b><br>Measures how strongly the tower’s signal reaches your phone.<br><b>Effect:</b> ${esc(scanMetricExperience('rsrp',rr[0]))}`:'⚪ <b>Unknown</b><br>Signal strength could not be measured from this scan.'}</div>
@@ -5101,8 +5166,6 @@ runOcrBtn.addEventListener('click',async()=>{
  if(!window.Tesseract){document.getElementById('ocrStatus').textContent='OCR engine did not load.';return;}
  runOcrBtn.disabled=true;
  document.getElementById('scanIdentity').innerHTML='';
- try{document.getElementById('scanIdentity').insertAdjacentHTML('beforeend',renderRadioVerificationBadges(x));}catch(e){}
-
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
@@ -5140,7 +5203,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 23';
+  const BUILD='Current 24';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){

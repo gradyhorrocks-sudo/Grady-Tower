@@ -1,4 +1,8 @@
-Master Cellular Tower Registry v88
-Updated in place from v87.
-Signal ratings now use the supplied RF Connectivity chart's four levels: Excellent, Good, Medium, Weak.
-Overall signal combines available RSRP/RSRQ/SINR grades so one weak metric does not automatically force the entire connection to Weak.
+Current 53 — Franklin Table Parser Lock
+
+- Franklin hotspot Debug/LTE table parser rebuilt around label-bounded spatial values.
+- Franklin values are applied after generic OCR parsing so generic logic cannot overwrite them.
+- Handles Franklin wrapped table labels without requiring them to survive on one OCR line.
+- Preserves cached offline OCR behavior from Current 51/52.
+- Preserves automatic two-way cloud registry synchronization and offline upload queue.
+- CellMapper remains removed.

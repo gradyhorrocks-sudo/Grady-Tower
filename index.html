@@ -48,7 +48,7 @@ document.addEventListener('click',e=>{
 });
 
 </script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" crossorigin="anonymous"></script>
 <title>Master Cellular Tower Registry</title>
 <style>
 :root{color-scheme:dark}
@@ -247,10 +247,29 @@ main, .container, .content{
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 
 <script>
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(rs=>Promise.all(rs.map(r=>r.unregister()))).catch(()=>{});
-}
+
 </script>
+<script>
+
+
+</script>
+
+<script>
+async function registerTowerServiceWorker(){
+  if(!('serviceWorker' in navigator)) return null;
+  try{
+    const swUrl=new URL('./sw.js?v=current48',location.href).href;
+    const reg=await navigator.serviceWorker.register(swUrl,{scope:'./'});
+    await navigator.serviceWorker.ready;
+    return reg;
+  }catch(e){
+    console.warn('Tower service worker registration failed',e);
+    return null;
+  }
+}
+window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
+</script>
+
 </head>
 <body>
 
@@ -270,6 +289,10 @@ if('serviceWorker' in navigator){
 <h1>Master Cellular Tower Registry</h1>
 <div id="deviceLayoutInfo" class="small muted" style="margin-top:4px"></div>
 <div class="muted">Editable offline tower registry with LTE/5G identifier math.</div>
+<div id="cloudSyncHeader" class="small muted" style="margin-top:4px">☁ Sync: starting…</div>
+<div id="offlineRegistryStatus" class="small muted" style="margin-top:4px">📥 Offline registry: checking…</div>
+<div id="offlineUploadStatus" class="small muted" style="margin-top:4px">⬆ Offline upload queue: checking…</div>
+
 
 <div class="tabs">
 <button class="tab active" onclick="showTab('lookup',this)">Lookup</button>
@@ -279,13 +302,14 @@ if('serviceWorker' in navigator){
 <button class="tab" onclick="showTab('add',this)">Add/Edit</button>
 </div>
 <div id="workBranchBanner" style="margin:8px 0 12px;padding:8px 12px;border:1px solid #475569;border-radius:10px;background:#111827;font-size:13px">
-  <b>CURRENT 10:</b> CellMapper and Backup removed.
+  <b>CURRENT 51:</b> True cached offline OCR • Automatic cloud sync preserved • No CellMapper.
 </div>
 
 <div id="pendingChangesBar" class="card hidden" style="position:sticky;top:58px;z-index:8;border-color:#7c5f16">
   <div class="row" style="align-items:center">
     <div style="flex:2">
       <b>Pending changes:</b> <span id="pendingChangesCount">0</span>
+      <div id="cloudSyncStatus" class="small muted" style="margin-top:4px">☁ Sync: starting…</div>
       <div class="small muted">Changes to existing towers are only previews until you save them.</div>
     </div>
     <button class="good" onclick="saveAllPendingChanges()">Save All Changes</button>
@@ -585,8 +609,29 @@ function goBackFromAddEdit(){
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
 function keyOf(r){return `${r.carrier}|${r.radio}|${r.eNB||r.gNB||''}`}
-function saveLocal(){localStorage.setItem('masterTowerRegistry',JSON.stringify(DB))}
-function loadLocal(){const x=localStorage.getItem('masterTowerRegistry'); if(x){try{return JSON.parse(x)}catch(e){}} return null}
+function saveLocal(reason='tower/registry save'){
+ try{stampRegistryForSync()}catch(e){}
+ localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+ try{
+   const state=getCloudState();
+   saveOfflineRegistryCopy(DB,Number(state.remoteRevision||0));
+   showOfflineRegistryStatus();
+ }catch(e){}
+ try{queueRegistrySnapshotForUpload(reason)}catch(e){}
+ try{markCloudPending()}catch(e){}
+}
+function loadLocal(){
+ const x=localStorage.getItem('masterTowerRegistry');
+ if(x){
+   try{
+     const parsed=JSON.parse(x);
+     if(parsed && Array.isArray(parsed.records))return parsed;
+   }catch(e){}
+ }
+ const offline=loadOfflineRegistryCopy();
+ if(offline)return offline;
+ return null;
+}
 
 const REGISTRY_DATA_REVISION='current-2-20260818';
 const FORCE_5G_IDS=new Set(['1863257','1863262','1854933','1844892','1878397','1849602','1878321','1856035','1104837','1841602','1841527','1863255','1863260','1863256','1863261']);
@@ -626,7 +671,7 @@ function mergeBuiltinRegistry(builtin,local){
 
 
 
-const FIXED_APP_PIN='159357';
+const FIXED_APP_PIN='312290';
 
 function openBackupWithPin(btn){
   const entered=prompt('Enter PIN to open Backup');
@@ -677,6 +722,9 @@ function unlockApp(){
 
 
 document.addEventListener('DOMContentLoaded',()=>{
+ 
+ showOfflineUploadStatus();
+ showOfflineRegistryStatus();
  const btn=document.getElementById('lockBtn');
  const pin=document.getElementById('lockPin');
 
@@ -1163,7 +1211,7 @@ function saveAllPendingChanges(){
       }
     }
 
-    saveLocal();
+    saveLocal('Save All tower changes');
 
     pendingTowerChanges={};
     refreshPendingChangesUI();
@@ -1211,7 +1259,12 @@ function discardAllPendingChanges(){
 }
 
 fetch('registry.json?v=current2',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('registry.json '+r.status);return r.json()}).then(j=>{
- BUILTIN=j;DB=purgeForbiddenNrBandsFromRegistry(mergeBuiltinRegistry(j,loadLocal()));saveLocal();renderRegistry();refreshUniversalLookupIfPresent();refreshCarrierList();syncPlmn();
+ BUILTIN=j;DB=purgeForbiddenNrBandsFromRegistry(mergeBuiltinRegistry(j,loadLocal()));
+ try{
+   localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+   saveOfflineRegistryCopy(DB,Number(getCloudState().remoteRevision||0));
+ }catch(e){}
+ renderRegistry();refreshUniversalLookupIfPresent();refreshCarrierList();syncPlmn();
 }).catch(err=>{console.error('Registry load failed',err);const out=document.getElementById('out');if(out)out.innerHTML='<div class="card unknown">Could not load registry.json.</div>'});
 
 function signalRating(kind,v){
@@ -1811,29 +1864,25 @@ function normalizeCellMapperTower(raw){
 }
 
 
+
+// Current 37: CellMapper is intentionally disabled and reserved for a later build.
+const CELLMAPPER_FEATURE_ENABLED=false;
+
 const REMOTE_BACKEND_KEY='towerRegistryRemoteBackendUrl';
+
+try{localStorage.removeItem(REMOTE_BACKEND_KEY);}catch(e){}
+
 
 function normalizeBackendUrl(v){
  return String(v||'').trim().replace(/\/+$/,'');
 }
 function getRemoteBackendUrl(){
- return normalizeBackendUrl(localStorage.getItem(REMOTE_BACKEND_KEY)||'');
+ return 'https://quiet-medovik-986798.netlify.app';
 }
 function saveRemoteBackendUrl(){
- const input=document.getElementById('remoteBackendUrl');
  const status=document.getElementById('remoteBackendStatus');
- const url=normalizeBackendUrl(input?.value||'');
- if(!url){
-   localStorage.removeItem(REMOTE_BACKEND_KEY);
-   if(status)status.textContent='Backend URL cleared.';
-   return;
- }
- if(!/^https:\/\//i.test(url)){
-   if(status)status.textContent='Use an https:// backend URL.';
-   return;
- }
- localStorage.setItem(REMOTE_BACKEND_KEY,url);
- if(status)status.textContent='Backend URL saved on this device.';
+ localStorage.removeItem(REMOTE_BACKEND_KEY);
+ if(status)status.textContent='Backend fixed to https://quiet-medovik-986798.netlify.app';
 }
 async function testRemoteBackend(){
  const status=document.getElementById('remoteBackendStatus');
@@ -1854,6 +1903,310 @@ async function testRemoteBackend(){
 document.addEventListener('DOMContentLoaded',()=>{
  const input=document.getElementById('remoteBackendUrl');
  if(input)input.value=getRemoteBackendUrl();
+});
+
+
+
+
+const OFFLINE_REGISTRY_KEY='towerRegistryOfflineMaster_v41';
+const OFFLINE_REGISTRY_META_KEY='towerRegistryOfflineMasterMeta_v41';
+
+function saveOfflineRegistryCopy(registry,revision=0){
+ try{
+   if(!registry || !Array.isArray(registry.records))return false;
+   localStorage.setItem(OFFLINE_REGISTRY_KEY,JSON.stringify(registry));
+   localStorage.setItem(OFFLINE_REGISTRY_META_KEY,JSON.stringify({
+     revision:Number(revision||0),
+     savedAt:Date.now(),
+     count:registry.records.length
+   }));
+   return true;
+ }catch(e){return false}
+}
+function loadOfflineRegistryCopy(){
+ try{
+   const raw=localStorage.getItem(OFFLINE_REGISTRY_KEY);
+   if(!raw)return null;
+   const x=JSON.parse(raw);
+   return x && Array.isArray(x.records)?x:null;
+ }catch(e){return null}
+}
+function offlineRegistryMeta(){
+ try{return JSON.parse(localStorage.getItem(OFFLINE_REGISTRY_META_KEY)||'{}')||{}}catch(e){return {}}
+}
+function showOfflineRegistryStatus(){
+ const meta=offlineRegistryMeta();
+ const el=document.getElementById('offlineRegistryStatus');
+ if(!el)return;
+ const count=Number(meta.count||0);
+ if(count){
+   const when=meta.savedAt?new Date(meta.savedAt).toLocaleString():'';
+   el.textContent=`📥 Offline registry: ${count} towers saved${when?' • '+when:''}`;
+ }else{
+   el.textContent='📥 Offline registry: not downloaded yet';
+ }
+}
+
+
+const OFFLINE_UPLOAD_QUEUE_KEY='towerRegistryOfflineUploadQueue_v42';
+
+function getOfflineUploadQueue(){
+ try{
+   const q=JSON.parse(localStorage.getItem(OFFLINE_UPLOAD_QUEUE_KEY)||'[]');
+   return Array.isArray(q)?q:[];
+ }catch(e){return []}
+}
+function setOfflineUploadQueue(q){
+ try{localStorage.setItem(OFFLINE_UPLOAD_QUEUE_KEY,JSON.stringify(Array.isArray(q)?q:[]))}catch(e){}
+ showOfflineUploadStatus();
+}
+function queueRegistrySnapshotForUpload(reason='tower save'){
+ try{
+   const now=Date.now();
+   const q=getOfflineUploadQueue();
+   // Keep a compact durable journal. The full registry already lives in
+   // masterTowerRegistry/offline master, so each queue entry only needs metadata.
+   q.push({id:`${now}-${Math.random().toString(36).slice(2,8)}`,savedAt:now,reason:String(reason||'tower save')});
+   // Cap journal growth while preserving the most recent offline saves.
+   setOfflineUploadQueue(q.slice(-100));
+ }catch(e){}
+}
+function clearOfflineUploadQueue(){
+ setOfflineUploadQueue([]);
+}
+function showOfflineUploadStatus(){
+ const el=document.getElementById('offlineUploadStatus');
+ if(!el)return;
+ const q=getOfflineUploadQueue();
+ if(q.length){
+   el.textContent=navigator.onLine
+     ? `⬆ ${q.length} saved change${q.length===1?'':'s'} waiting for confirmed upload`
+     : `⬆ ${q.length} saved change${q.length===1?'':'s'} stored on this device • uploads when service returns`;
+ }else{
+   el.textContent='⬆ Offline upload queue: clear';
+ }
+}
+
+
+// Current 51 keeps the OCR runtime in the app's Service Worker cache.
+// After one successful online setup, these exact version-pinned resources are
+// served from CacheStorage even with no data/Wi-Fi connection.
+const OFFLINE_OCR_ASSETS=[
+ 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
+ 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+ 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js',
+ 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int/eng.traineddata.gz'
+];
+
+async function offlineOcrCachedCount(){
+ if(!('caches' in window))return 0;
+ let n=0;
+ for(const url of OFFLINE_OCR_ASSETS){
+   try{ if(await caches.match(url))n++; }catch(e){}
+ }
+ return n;
+}
+
+async function warmOfflineOcr(){
+ const el=document.getElementById('offlineOcrStatus');
+ try{ await registerTowerServiceWorker(); }catch(e){}
+ let have=await offlineOcrCachedCount();
+ if(navigator.onLine && have<OFFLINE_OCR_ASSETS.length){
+   if(el)el.textContent=`Preparing offline scanner… ${have}/${OFFLINE_OCR_ASSETS.length}`;
+   for(const url of OFFLINE_OCR_ASSETS){
+     try{
+       if(await caches.match(url))continue;
+       await fetch(url,{cache:'reload'});
+     }catch(e){}
+     have=await offlineOcrCachedCount();
+     if(el)el.textContent=`Preparing offline scanner… ${have}/${OFFLINE_OCR_ASSETS.length}`;
+   }
+ }
+ have=await offlineOcrCachedCount();
+ const complete=have===OFFLINE_OCR_ASSETS.length;
+ if(el){
+   if(complete && window.Tesseract)el.textContent=`Offline scanner ready ✓ (${have}/${OFFLINE_OCR_ASSETS.length})`;
+   else if(complete)el.textContent=`Offline OCR files ready ✓ (${have}/${OFFLINE_OCR_ASSETS.length}) • reload app once`;
+   else if(navigator.onLine)el.textContent=`Offline scanner setup incomplete: ${have}/${OFFLINE_OCR_ASSETS.length}`;
+   else el.textContent=`App offline • OCR cache incomplete: ${have}/${OFFLINE_OCR_ASSETS.length}`;
+ }
+ return complete && !!window.Tesseract;
+}
+
+const CLOUD_SYNC_STATE_KEY='towerRegistryCloudSyncState_v34';
+const CLOUD_SYNC_DEVICE_KEY='towerRegistryCloudDeviceId_v34';
+const CLOUD_SYNC_PIN_KEY='towerRegistryCloudPin_v34';
+let cloudSyncBusy=false;
+let cloudSyncTimer=null;
+
+function cloudDeviceId(){
+ let id=localStorage.getItem(CLOUD_SYNC_DEVICE_KEY);
+ if(!id){
+   id='dev-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,10);
+   localStorage.setItem(CLOUD_SYNC_DEVICE_KEY,id);
+ }
+ return id;
+}
+function cloudSyncPin(){
+ return '159357';
+}
+function setCloudSyncStatus(text,good=false){
+ for(const id of ['cloudSyncStatus','cloudSyncHeader']){
+   const el=document.getElementById(id);
+   if(el){
+     el.textContent=text;
+     el.style.color=good?'#6ee7a2':'';
+   }
+ }
+}
+function getCloudState(){
+ try{return JSON.parse(localStorage.getItem(CLOUD_SYNC_STATE_KEY)||'{}')||{}}catch(e){return {}}
+}
+function setCloudState(x){
+ localStorage.setItem(CLOUD_SYNC_STATE_KEY,JSON.stringify(x||{}));
+}
+function cloneJson(x){return JSON.parse(JSON.stringify(x));}
+
+function recordSyncKey(r){
+ return `${String(r?.carrier||'').trim().toLowerCase()}|${String(r?.radio||'').trim().toUpperCase()}|${String(r?.eNB||r?.gNB||'').trim()}`;
+}
+function mergeCloudRegistry(local,remote){
+ if(!remote||!Array.isArray(remote.records))return local;
+ if(!local||!Array.isArray(local.records))return cloneJson(remote);
+
+ const out=cloneJson(local);
+ out.plmns={...(remote.plmns||{}),...(local.plmns||{})};
+ out.rules={...(remote.rules||{}),...(local.rules||{})};
+
+ const map=new Map((out.records||[]).map(r=>[recordSyncKey(r),r]));
+ for(const rr0 of remote.records||[]){
+   const rr=cloneJson(rr0), k=recordSyncKey(rr);
+   if(!k||k.endsWith('|'))continue;
+   const lr=map.get(k);
+   if(!lr){
+     out.records.push(rr); map.set(k,rr); continue;
+   }
+   const lt=Number(lr._syncModifiedAt||0);
+   const rt=Number(rr._syncModifiedAt||0);
+   if(rt>lt){
+     const i=out.records.indexOf(lr);
+     if(i>=0)out.records[i]=rr;
+     map.set(k,rr);
+   }
+ }
+ return out;
+}
+function stampRegistryForSync(){
+ const now=Date.now();
+ const state=getCloudState();
+ const baseline=state.baseline||{};
+ const baseMap=new Map((baseline.records||[]).map(r=>[recordSyncKey(r),r]));
+
+ for(const r of DB.records||[]){
+   const k=recordSyncKey(r);
+   const old=baseMap.get(k);
+
+   const cleanCurrent={...r};
+   const cleanOld=old?{...old}:null;
+   delete cleanCurrent._syncModifiedAt;
+   if(cleanOld)delete cleanOld._syncModifiedAt;
+
+   const changed=!old || JSON.stringify(cleanCurrent)!==JSON.stringify(cleanOld);
+
+   // Critical offline fix: every new/changed record gets a fresh modification
+   // timestamp, even if it had already synced in the past.
+   if(changed){
+     r._syncModifiedAt=now;
+   }else if(old && Number(old._syncModifiedAt||0)){
+     r._syncModifiedAt=Number(old._syncModifiedAt);
+   }
+ }
+}
+function markCloudPending(){
+ const state=getCloudState();
+ state.pending=true;
+ state.pendingSince=state.pendingSince||Date.now();
+ setCloudState(state);
+ setCloudSyncStatus(navigator.onLine?'☁ Sync: pending upload':'☁ Offline • changes saved locally');
+ scheduleCloudSync(1200);
+}
+function scheduleCloudSync(ms=800){
+ clearTimeout(cloudSyncTimer);
+ cloudSyncTimer=setTimeout(()=>cloudSyncNow(false),ms);
+}
+async function cloudSyncNow(force=false){
+ if(cloudSyncBusy)return;
+ const base=getRemoteBackendUrl();
+ if(!base){
+   setCloudSyncStatus('☁ Sync error: backend URL missing');
+   return;
+ }
+ if(!navigator.onLine){
+   setCloudSyncStatus('☁ Offline • changes saved locally');
+   return;
+ }
+ cloudSyncBusy=true;
+ try{
+   stampRegistryForSync();
+   const state=getCloudState();
+   setCloudSyncStatus('☁ Syncing…');
+
+   // text/plain keeps this a "simple" cross-origin request, avoiding a CORS
+   // preflight between GitHub Pages and the Netlify sync backend.
+   const resp=await fetch(base+'/.netlify/functions/registry-sync',{
+     method:'POST',
+     headers:{'content-type':'text/plain;charset=UTF-8'},
+     body:JSON.stringify({
+       pin:cloudSyncPin(),
+       deviceId:cloudDeviceId(),
+       registry:DB,
+       clientRevision:Number(state.remoteRevision||0)
+     }),
+     cache:'no-store'
+   });
+
+   const raw=await resp.text();
+   let data={};
+   try{data=JSON.parse(raw||'{}')}catch(e){}
+
+   if(!resp.ok||!data.ok){
+     const detail=String(data.error||raw||('HTTP '+resp.status)).slice(0,120);
+     throw new Error(`HTTP ${resp.status}: ${detail}`);
+   }
+
+   if(data.registry&&Array.isArray(data.registry.records)){
+     DB=mergeCloudRegistry(DB,data.registry);
+     localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+       saveOfflineRegistryCopy(DB,Number(data.revision||0));
+     showOfflineRegistryStatus();
+   }
+   setCloudState({
+     pending:false,
+     remoteRevision:Number(data.revision||0),
+     lastSync:Date.now(),
+     baseline:cloneJson(DB)
+   });
+   clearOfflineUploadQueue();
+   showOfflineUploadStatus();
+   setCloudSyncStatus('☁ Synced ✓',true);
+   try{renderRegistry()}catch(e){}
+ }catch(e){
+   const state=getCloudState();
+   state.pending=true;
+   state.lastError=String(e?.message||e||'Unknown sync error');
+   setCloudState(state);
+   const msg=String(e?.message||e||'Unknown error').replace(/\s+/g,' ').slice(0,140);
+   setCloudSyncStatus(navigator.onLine?`☁ Sync error: ${msg}`:'☁ Offline • changes saved locally');
+ }finally{
+   cloudSyncBusy=false;
+ }
+}
+window.addEventListener('online',()=>{showOfflineUploadStatus();warmOfflineOcr();cloudSyncNow(true)});
+window.addEventListener('offline',()=>{setCloudSyncStatus('☁ Offline • changes saved locally');showOfflineUploadStatus()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloudSyncNow(false)});
+document.addEventListener('DOMContentLoaded',()=>{
+ setTimeout(()=>cloudSyncNow(false),1200);
+ setInterval(()=>cloudSyncNow(false),60000);
 });
 
 
@@ -2128,7 +2481,7 @@ async function runBackgroundCellMapperLookup(fieldsOverride){
          <div class="label">Workflow start URL</div><div style="word-break:break-all">${esc(data.workflowStartUrl||'Not returned')}</div>
          <div class="label">Workflow video</div>
          <div>${data.videoInfo?.base64
-           ? `<button class="btn secondary" onclick="downloadLastCellMapperVideo()">Download Video</button>`
+           ? ``
            : esc(data.videoInfo?.note||'Not returned')}</div>
        </div>
      </div>`;
@@ -2534,8 +2887,8 @@ function coreSaveRecord(){
      toast('Tower edit added to pending changes.');
    }else{
      DB.records.push(rec);
-     saveLocal();
-     toast('New tower saved.');
+     saveLocal('new tower saved');
+     toast(navigator.onLine?'New tower saved.':'New tower saved on this device • will upload when service returns.');
    }
  } else {
    DB.records.push(rec);
@@ -2989,22 +3342,33 @@ function mergeBandIntoList(existing,band,radio){
 }
 
 function findExistingScanTower(carrier,radio,sid){
- const id=String(sid||'').trim();
+ const id=String(sid||'').replace(/\D/g,'');
+ const wantRadio=String(radio||'').trim().toUpperCase();
+ const wantCarrier=String(carrier||'').trim().toLowerCase();
  if(!id || !DB || !Array.isArray(DB.records))return null;
 
- // Preferred match: carrier + radio + tower ID.
+ const carrierEquivalent=(a,b)=>{
+   a=String(a||'').trim().toLowerCase();
+   b=String(b||'').trim().toLowerCase();
+   if(a===b)return true;
+   if((a==='strata'||a==='strata networks')&&(b==='strata'||b==='strata networks'))return true;
+   if((a==='t-mobile'||a==='tmobile')&&(b==='t-mobile'||b==='tmobile'))return true;
+   if((a==='union wireless'||a==='union')&&(b==='union wireless'||b==='union'))return true;
+   return false;
+ };
+
+ // Primary local match: normalized carrier + radio + tower ID.
  let rec=DB.records.find(r=>
-   String(r.carrier||'')===String(carrier||'') &&
-   String(r.radio||'')===String(radio||'') &&
-   String(r.eNB||r.gNB||'')===id
+   carrierEquivalent(r.carrier,wantCarrier) &&
+   String(r.radio||'').trim().toUpperCase()===wantRadio &&
+   String(r.eNB||r.gNB||'').replace(/\D/g,'')===id
  );
  if(rec)return rec;
 
- // If an older/minimal record was saved without useful carrier metadata,
- // allow an ID-only fallback ONLY when it is unique for this radio type.
+ // Fallback: ID-only is safe only when unique for this radio.
  const matches=DB.records.filter(r=>
-   String(r.radio||'')===String(radio||'') &&
-   String(r.eNB||r.gNB||'')===id
+   String(r.radio||'').trim().toUpperCase()===wantRadio &&
+   String(r.eNB||r.gNB||'').replace(/\D/g,'')===id
  );
  return matches.length===1 ? matches[0] : null;
 }
@@ -3153,7 +3517,95 @@ function describe5gNciStatus(fields){
  if(fields?.cell)return '5G NCI read successfully. No matching gNB is currently mapped in the registry.';
  return '5G Cell ID/NCI was not read.';
 }
+
+function normalizeRegistryPlmn(v){
+ return String(v||'').replace(/\D/g,'');
+}
+function registryCarrierMatchForPlmn(rec,plmn){
+ const p=normalizeRegistryPlmn(plmn);
+ const rp=normalizeRegistryPlmn(rec?.plmn);
+ if(!p)return true;
+ if(rp===p)return true;
+ // Union Wireless may appear as 31020 or 310020.
+ if((p==='31020'||p==='310020') && (rp==='31020'||rp==='310020'))return true;
+ return false;
+}
+function findLocalRegistryTowerFromScan(fields){
+ if(!fields || !DB || !Array.isArray(DB.records))return null;
+
+ const radio=String(fields.radio||'').toUpperCase();
+ const plmn=normalizeRegistryPlmn(fields.plmn);
+ const cell=String(fields.cell||fields.cell_id||fields.nci||'').replace(/\D/g,'');
+ let sid=String(fields.sid||fields.eNB||fields.gNB||'').replace(/\D/g,'');
+
+ if(radio==='LTE'){
+   if(!sid && cell){
+     try{sid=(BigInt(cell)/256n).toString()}catch(e){}
+   }
+   if(!sid)return null;
+   return DB.records.find(r=>
+     String(r.radio||'').toUpperCase()==='LTE' &&
+     String(r.eNB||'').replace(/\D/g,'')===sid &&
+     registryCarrierMatchForPlmn(r,plmn)
+   ) || null;
+ }
+
+ if(radio==='5G'){
+   if(!sid && cell){
+     try{sid=(BigInt(cell)/4096n).toString()}catch(e){}
+   }
+   if(!sid)return null;
+   return DB.records.find(r=>
+     String(r.radio||'').toUpperCase()==='5G' &&
+     String(r.gNB||'').replace(/\D/g,'')===sid &&
+     registryCarrierMatchForPlmn(r,plmn)
+   ) || null;
+ }
+
+ // If OCR did not classify radio but we have a Cell ID, try both math paths
+ // against the downloaded/local registry instead of requiring internet.
+ if(cell){
+   let lteSid='', nrSid='';
+   try{
+     const n=BigInt(cell);
+     lteSid=(n/256n).toString();
+     nrSid=(n/4096n).toString();
+   }catch(e){}
+   const lte=DB.records.find(r=>
+     String(r.radio||'').toUpperCase()==='LTE' &&
+     String(r.eNB||'').replace(/\D/g,'')===lteSid &&
+     registryCarrierMatchForPlmn(r,plmn)
+   );
+   if(lte)return lte;
+   const nr=DB.records.find(r=>
+     String(r.radio||'').toUpperCase()==='5G' &&
+     String(r.gNB||'').replace(/\D/g,'')===nrSid &&
+     registryCarrierMatchForPlmn(r,plmn)
+   );
+   if(nr)return nr;
+ }
+ return null;
+}
+function applyLocalRegistryMatchToScan(fields){
+ const rec=findLocalRegistryTowerFromScan(fields);
+ if(!rec)return fields;
+ fields.site=rec.site||fields.site||'';
+ fields.carrier=rec.carrier||fields.carrier||'';
+ fields.plmn=rec.plmn||fields.plmn||'';
+ fields.radio=rec.radio||fields.radio||'';
+ if(rec.radio==='LTE'){
+   fields.sid=String(rec.eNB||fields.sid||'');
+   fields.eNB=String(rec.eNB||fields.eNB||'');
+ }else if(rec.radio==='5G'){
+   fields.sid=String(rec.gNB||fields.sid||'');
+   fields.gNB=String(rec.gNB||fields.gNB||'');
+ }
+ return fields;
+}
+
+
 function identifyFromScan(fields){
+ fields=applyLocalRegistryMatchToScan(fields);
  if(String(fields?.radio||'').toUpperCase()==='5G'){
    fields.band=sanitizeNrBand(fields.band);
    const d=derive5gFromRegistry(fields.cell,fields.carrier,fields.plmn);
@@ -3170,6 +3622,28 @@ function identifyFromScan(fields){
  const carrier=DB.plmns[plmn]||'Unknown';
 
  const rec=findExistingScanTower(carrier,radio,sid);
+
+ // Current 45: once the downloaded/local registry matches, propagate that
+ // authoritative record into both the scan object and the visible edit fields.
+ if(rec){
+   fields.site=rec.site||fields.site||'';
+   fields.carrier=rec.carrier||fields.carrier||carrier;
+   fields.plmn=rec.plmn||fields.plmn||plmn;
+   fields.radio=rec.radio||fields.radio||radio;
+   if(rec.radio==='LTE'){
+     fields.sid=String(rec.eNB||fields.sid||'');
+     fields.eNB=String(rec.eNB||fields.eNB||'');
+   }else if(rec.radio==='5G'){
+     fields.sid=String(rec.gNB||fields.sid||'');
+     fields.gNB=String(rec.gNB||fields.gNB||'');
+   }
+   const siteField=document.getElementById('sSite');
+   if(siteField)siteField.value=fields.site||'';
+   const idField=document.getElementById('sId');
+   if(idField)idField.value=fields.sid||'';
+   const radioField=document.getElementById('sRadio');
+   if(radioField)radioField.value=fields.radio||radio;
+ }
 
  // v80: existing tower + newly observed band = automatically enrich the saved record.
  // This never creates a new tower; it only adds a band to an already-matched tower.
@@ -3925,7 +4399,7 @@ function saveAllScanEdits(){
    }
  }
 
- saveLocal();
+ saveLocal('scan tower + signal values saved');
  activeScanRecordKey=keyOf(rec);
 
  try{renderRegistry();}catch(e){}
@@ -5365,6 +5839,7 @@ function maintainDuplicateDualRadioBadge(fields){
  setTimeout(()=>{try{obs.disconnect();}catch(e){}},2000);
 }
 function fillScanResults(x,text){
+ x=applyLocalRegistryMatchToScan(x);
  if(x?._hotspotFormat){
    x.radio='LTE';
    if(x.band && !/^B/i.test(x.band))x.band='B'+String(x.band).replace(/\D/g,'');
@@ -5563,15 +6038,31 @@ async function pasteScanImage(){
 }
 
 runOcrBtn.addEventListener('click',async()=>{
+
  const f=scanImage.files&&scanImage.files[0];
  if(!f){document.getElementById('ocrStatus').textContent='Choose a screenshot first.';return;}
- if(!window.Tesseract){document.getElementById('ocrStatus').textContent='OCR engine did not load.';return;}
+ if(!window.Tesseract){
+   document.getElementById('ocrStatus').textContent=navigator.onLine
+     ? 'OCR engine did not load.'
+     : 'Offline OCR cache is incomplete. Reconnect once and wait for “Offline scanner ready ✓”, then scanning will work offline.';
+   return;
+ }
  runOcrBtn.disabled=true;
  document.getElementById('scanIdentity').innerHTML='';
  try{
    document.getElementById('ocrStatus').textContent='Scanning and autofilling fields…';
    const enhanced=await makeEnhancedImage(f);
+   // Current 51 pins the OCR runtime to the same URLs pre-cached by sw.js.
+   // The non-SIMD LSTM core is intentionally selected for broad Safari/iPhone
+   // compatibility. Once cached, every request below is satisfied offline.
+   const OCR_REMOTE={
+     workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+     corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1/tesseract-core-lstm.wasm.js',
+     langPath:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int',
+     gzip:true
+   };
    const r1=await Tesseract.recognize(enhanced,'eng',{
+     ...OCR_REMOTE,
      logger:m=>{if(m.status==='recognizing text')document.getElementById('ocrStatus').textContent=`Enhanced scan ${Math.round((m.progress||0)*100)}%…`;}
    },{blocks:true,tsv:true});
    const d1=r1?.data||{};
@@ -5581,6 +6072,7 @@ runOcrBtn.addEventListener('click',async()=>{
 
    // Always do a second pass on the original. Merge whichever pass reads each row best.
    const r2=await Tesseract.recognize(f,'eng',{
+     ...OCR_REMOTE,
      logger:m=>{if(m.status==='recognizing text')document.getElementById('ocrStatus').textContent=`Original scan ${Math.round((m.progress||0)*100)}%…`;}
    },{blocks:true,tsv:true});
    const d2=r2?.data||{};
@@ -5600,7 +6092,10 @@ runOcrBtn.addEventListener('click',async()=>{
      document.getElementById('ocrStatus').textContent='Autofill completed, but OCR still missed: '+miss.join(', ')+'.';
    }
  }catch(e){
-   document.getElementById('ocrStatus').textContent='OCR failed on this image.';
+   const msg=String(e&&e.message||e||'').replace(/\s+/g,' ').slice(0,100);
+   document.getElementById('ocrStatus').textContent=navigator.onLine
+     ? `OCR failed on this image${msg?': '+msg:''}.`
+     : `Offline OCR could not complete${msg?': '+msg:''}.`;
  }
  runOcrBtn.disabled=false;
 });
@@ -5610,17 +6105,14 @@ runOcrBtn.addEventListener('click',async()=>{
 
 <script>
 (function(){
-  const BUILD='Current 33';
+  const BUILD='Current 51';
   const KEY='towerRegistryFrontendBuildSeen';
 
   async function refreshAppCaches(){
     try{
-      if('caches' in window){
-        const names=await caches.keys();
-        await Promise.all(names.map(n=>{
-          if(!n.includes(BUILD)) return caches.delete(n);
-        }));
-      }
+      // Do not delete CacheStorage here. Current 50 accidentally deleted its
+      // own active cache because its BUILD label did not match the SW cache name.
+      // sw.js now performs version migration safely during activation.
 
       // Ask an old service worker to step aside. This does NOT clear localStorage,
       // so saved registry data/PIN trust/backend URL remain untouched.
@@ -5631,9 +6123,9 @@ runOcrBtn.addEventListener('click',async()=>{
         }
       }
 
-      const seen=sessionStorage.getItem(KEY);
+      const seen=localStorage.getItem(KEY);
       if(seen!==BUILD){
-        sessionStorage.setItem(KEY,BUILD);
+        localStorage.setItem(KEY,BUILD);
         // One cache-busted reload so GitHub Pages/Safari requests fresh HTML/assets.
         const u=new URL(location.href);
         u.searchParams.set('build',BUILD);
@@ -5860,6 +6352,7 @@ function fillBackgroundCellMapperIntoForm(){ return false; }
   window.__manualSignalAnalyzerTest={numbers,mean,gradeRSRP,gradeRSRQ,gradeSNR};
 })();
 </script>
+
 
 </body>
 </html>

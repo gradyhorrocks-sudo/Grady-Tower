@@ -243,6 +243,19 @@ main, .container, .content{
   font-weight:900;
 }
 
+
+/* iPad/iPhone-compatible full-screen map panel, including tower search. */
+.map-fullscreen-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:12px 0 0;flex-wrap:wrap}
+.map-fullscreen-toolbar button{width:auto;min-width:130px;flex:0 0 auto}
+.map-fullscreen-panel.is-fullscreen{position:fixed!important;inset:0!important;inset:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0!important;z-index:99999!important;background:#0e1424!important;padding:10px 12px!important;box-sizing:border-box!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
+.map-fullscreen-panel.is-fullscreen .map-fullscreen-toolbar{flex:0 0 auto;margin:0 0 6px}
+.map-fullscreen-panel.is-fullscreen > .card{flex:0 0 auto;margin:0 0 6px!important;padding:8px 10px!important;max-height:39vh;overflow:auto}
+.map-fullscreen-panel.is-fullscreen > .card p.small{display:none}
+.map-fullscreen-panel.is-fullscreen textarea#mapTowerSearch{height:46px!important;min-height:46px!important;resize:none}
+.map-fullscreen-panel.is-fullscreen #mapTowerSearchResults{max-height:16vh!important;overflow:auto}
+.map-fullscreen-panel.is-fullscreen #towerMap{flex:1 1 auto!important;min-height:120px!important;height:auto!important;margin:0!important;border-radius:8px}
+body.map-fullscreen-active{overflow:hidden!important;touch-action:auto}
+@media(max-width:650px){.map-fullscreen-panel.is-fullscreen{padding:7px!important}.map-fullscreen-panel.is-fullscreen > .card{max-height:45vh}}
 </style>
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 
@@ -480,7 +493,10 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
  <div id="mapPlaceSearchStatus" class="small muted" role="status" aria-live="polite"></div>
  <div id="mapPlaceSearchResults"></div>
 </div>
+<div id="mapFullscreenPanel" class="map-fullscreen-panel">
+<div class="map-fullscreen-toolbar"><strong>Map &amp; Tower Search</strong><button id="mapFullscreenToggle" type="button" onclick="toggleTowerMapFullscreen()" aria-pressed="false">⛶ Full Screen</button></div>
 <div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div>
+</div><!-- mapFullscreenPanel -->
 <div class="card" style="margin-top:12px;padding:12px">
  <h3>Towers without map locations</h3>
  <p class="small muted">Existing and newly added towers without valid coordinates appear here. Select a tower, then tap the map and Save Location. No duplicate tower is created.</p>
@@ -492,7 +508,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <div id="mapStatus" class="small muted mapHint"></div>
 <div class="card hidden" id="mapCombinePanel" style="margin-top:12px;padding:12px">
  <b id="mapCombinePanelTitle">Tower map action</b>
- <p class="small muted">The first tower is selected. Tap the second tower on the map, then save. Green checkmarks identify both selections. You can cancel without changing anything.</p>
+ <p class="small muted">For colocation, select as many towers as you want. Tap a selected tower to remove it. Green checkmarks show your selection. Save once when finished. Combine Pins still selects two same-carrier pins.</p>
  <div class="row"><button type="button" id="saveMapCombineButton" class="good" onclick="saveSelectedMapPins()" disabled>Save</button><button type="button" class="secondary" onclick="cancelMapCombineMode()">Cancel</button></div>
  <div id="mapCombineStatus" class="small muted" role="status" aria-live="polite">Tap Combine Pins to begin.</div>
 </div>
@@ -818,8 +834,23 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 
+
+function toggleTowerMapFullscreen(force){
+ const panel=document.getElementById('mapFullscreenPanel');
+ if(!panel)return;
+ const on=typeof force==='boolean'?force:!panel.classList.contains('is-fullscreen');
+ panel.classList.toggle('is-fullscreen',on);
+ document.body.classList.toggle('map-fullscreen-active',on);
+ const btn=document.getElementById('mapFullscreenToggle');
+ if(btn){btn.textContent=on?'✕ Exit Full Screen':'⛶ Full Screen';btn.setAttribute('aria-pressed',String(on));}
+ // Leaflet must recalculate its canvas after the panel resizes.
+ if(towerMap){requestAnimationFrame(()=>{towerMap.invalidateSize({pan:false});setTimeout(()=>towerMap.invalidateSize({pan:false}),180);});}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('mapFullscreenPanel')?.classList.contains('is-fullscreen'))toggleTowerMapFullscreen(false);});
+
 let towerMap=null;
 let towerMarkers=[];
+let armedTowerMoveKeys=null;
 let activeMapEditRecord=null;
 let activeMapEditMarker=null;
 let pendingScannedTowerForMap=null;
@@ -967,15 +998,17 @@ let mapColocateMode=false;
 let mapCombineMode=false;
 let mapCombineFirstKeys=null, mapCombineSecondKeys=null;
 let mapCombineFirstMarker=null, mapCombineSecondMarker=null;
+let mapColocateSelections=[];
 function mapCombineStatus(message){
  const el=document.getElementById('mapCombineStatus');if(el)el.textContent=message;
  const panel=document.getElementById('mapCombinePanel');if(panel)panel.classList.toggle('hidden',!mapCombineMode);
- const save=document.getElementById('saveMapCombineButton');if(save){save.disabled=!(mapCombineMode&&mapCombineFirstKeys&&mapCombineSecondKeys);save.textContent=mapColocateMode?'Save Colocation':'Save Combined Pins';}
+ const save=document.getElementById('saveMapCombineButton');if(save){save.disabled=!(mapCombineMode&&(mapColocateMode?mapColocateSelections.length>=2:(mapCombineFirstKeys&&mapCombineSecondKeys)));save.textContent=mapColocateMode?'Save Colocation ('+mapColocateSelections.length+')':'Save Combined Pins';}
 }
 function unmarkMapCombineMarker(marker){
  const el=marker?.getElement();if(el){el.classList.remove('map-combine-selected');el.querySelector('.map-combine-check')?.remove();}
 }
 function clearMapCombineSelection(){
+ mapColocateSelections.forEach(x=>unmarkMapCombineMarker(x.marker));mapColocateSelections=[];
  unmarkMapCombineMarker(mapCombineFirstMarker);unmarkMapCombineMarker(mapCombineSecondMarker);
  mapCombineFirstMarker=null;mapCombineSecondMarker=null;mapCombineFirstKeys=null;mapCombineSecondKeys=null;
  const save=document.getElementById('saveMapCombineButton');if(save)save.disabled=true;
@@ -988,13 +1021,14 @@ function markMapCombineMarker(marker,label){
 }
 function toggleMapCombineMode(){mapColocateMode=false;mapCombineMode=true;clearMapCombineSelection();mapCombineStatus('Tap the first tower pin.');}
 function cancelMapCombineMode(){mapColocateMode=false;mapCombineMode=false;clearMapCombineSelection();mapCombineStatus('Selection canceled.');}
-function toggleMapColocateMode(){mapColocateMode=true;mapCombineMode=true;clearMapCombineSelection();mapCombineStatus('Tap destination tower, then tower to colocate. Saving moves the second tower to the first tower coordinates, without merging carriers.');}
+function toggleMapColocateMode(){mapColocateMode=true;mapCombineMode=true;clearMapCombineSelection();mapCombineStatus('Tap the destination tower first, then select any number of additional towers. Tap a selected tower to deselect it. Save once when ready.');}
 function startTowerMapAction(site,marker,colocate){
  mapColocateMode=!!colocate;mapCombineMode=true;clearMapCombineSelection();
  mapCombineFirstKeys=site.map(e=>keyOf(e.record));mapCombineFirstMarker=marker;
+ if(mapColocateMode)mapColocateSelections=[{keys:mapCombineFirstKeys,marker}];
  marker.closePopup();markMapCombineMarker(marker,'First tower selected');
- const title=document.getElementById('mapCombinePanelTitle');if(title)title.textContent=colocate?'Colocate with another tower':'Combine with another tower';
- mapCombineStatus('✓ First tower selected. Tap the second tower icon on the map.');
+ const title=document.getElementById('mapCombinePanelTitle');if(title)title.textContent=colocate?'Colocate multiple towers':'Combine with another tower';
+ mapCombineStatus(colocate?'✓ 1 tower selected. Tap more towers to add them, then Save Colocation.':'✓ First tower selected. Tap the second tower icon on the map.');
  const panel=document.getElementById('mapCombinePanel');if(panel){panel.classList.remove('hidden');panel.scrollIntoView({behavior:'smooth',block:'nearest'});}
 }
 function mapRecordsForKeys(keys){const set=new Set(keys||[]);return DB.records.filter(r=>set.has(keyOf(r)));}
@@ -1011,6 +1045,19 @@ function mapCombineMembers(){
 function mapPinTapped(site,marker){
  if(!mapCombineMode)return false;
  const keys=site.map(e=>keyOf(e.record));
+ if(mapColocateMode){
+  const existing=mapColocateSelections.findIndex(x=>x.keys.some(k=>keys.includes(k)));
+  if(existing>=0){
+   if(existing===0){mapCombineStatus('The destination is the first tower. Cancel and start again to change it.');return true;}
+   unmarkMapCombineMarker(mapColocateSelections[existing].marker);
+   mapColocateSelections.splice(existing,1);
+  }else{
+   mapColocateSelections.push({keys,marker});
+   markMapCombineMarker(marker,'Colocation tower '+mapColocateSelections.length+' selected');
+  }
+  mapCombineStatus('✓ '+mapColocateSelections.length+' tower icons selected. Tap more to add/remove, then Save Colocation. The first tower is the destination.');
+  return true;
+ }
  if(!mapCombineFirstKeys){
   mapCombineFirstKeys=keys;mapCombineFirstMarker=marker;
   markMapCombineMarker(marker,'First pin selected');
@@ -1031,8 +1078,8 @@ function mapPinTapped(site,marker){
  mapCombineStatus(mapColocateMode?'✓ Two towers selected. Tap Save Colocation to move the second tower to the first tower coordinates.':'✓ Both towers selected. Tap Save Combined Pins to confirm.');return true;
 }
 function saveSelectedMapPins(){
- if(!mapCombineMode||!mapCombineFirstKeys||!mapCombineSecondKeys){mapCombineStatus('Select two tower pins first.');return;}
  if(mapColocateMode){saveSelectedColocation();return;}
+ if(!mapCombineMode||!mapCombineFirstKeys||!mapCombineSecondKeys){mapCombineStatus('Select two tower pins first.');return;}
  const group=mapCombineMembers();if(!group){mapCombineStatus('Cannot save: tower records missing or carriers do not match.');return;}
  const {selected,members}=group;
  const groupId=selected.find(r=>r.mapPinGroup)?.mapPinGroup||'manual-'+Date.now().toString(36);
@@ -1043,21 +1090,26 @@ function saveSelectedMapPins(){
  mapCombineStatus('Combined pins saved locally. Coordinates unchanged. Wait for cloud sync.');
 }
 function saveSelectedColocation(){
- const first=mapRecordsForKeys(mapCombineFirstKeys),second=mapRecordsForKeys(mapCombineSecondKeys);
- if(!first.length||!second.length){mapCombineStatus('Tower selection missing.');return;}
+ if(!mapColocateMode||mapColocateSelections.length<2){mapCombineStatus('Select at least two tower icons before saving.');return;}
+ const first=mapRecordsForKeys(mapColocateSelections[0].keys);
+ if(!first.length){mapCombineStatus('Destination tower missing.');return;}
  const origin=getEffectiveRecord(first[0]);
- if(!validCoord(origin.latitude,-90,90)||!validCoord(origin.longitude,-180,180)){mapCombineStatus('First tower needs valid coordinates.');return;}
+ if(!validCoord(origin.latitude,-90,90)||!validCoord(origin.longitude,-180,180)){mapCombineStatus('Destination tower needs saved coordinates.');return;}
  const lat=Number(origin.latitude),lon=Number(origin.longitude);
- const selected=[...new Set([...first,...second])];
+ const chosen=mapColocateSelections.flatMap(x=>mapRecordsForKeys(x.keys));
+ if(mapColocateSelections.some(x=>!mapRecordsForKeys(x.keys).length)){mapCombineStatus('A selected tower is missing. Cancel and retry.');return;}
+ const groupIds=new Set(chosen.map(r=>r.mapColocationGroup).filter(Boolean));
+ // Preserve all existing members of previously colocated groups when joining sites.
+ const selected=DB.records.filter(r=>chosen.includes(r)||(r.mapColocationGroup&&groupIds.has(r.mapColocationGroup)));
  const id=first[0].mapColocationGroup||'coloc-'+Date.now().toString(36);
  const before=selected.map(r=>({r,lat:r.latitude,lon:r.longitude,group:r.mapColocationGroup}));
  try{
-  selected.forEach(r=>r.mapColocationGroup=id);
-  second.forEach(r=>{r.latitude=lat;r.longitude=lon;});
-  saveLocal('Colocate towers on map');
+  selected.forEach(r=>{r.mapColocationGroup=id;r.latitude=lat;r.longitude=lon;});
+  saveLocal('Colocate '+mapColocateSelections.length+' map tower icons');
  }catch(err){before.forEach(x=>{x.r.latitude=x.lat;x.r.longitude=x.lon;if(x.group)x.r.mapColocationGroup=x.group;else delete x.r.mapColocationGroup;});mapCombineStatus('Save failed: '+String(err));return;}
+ const count=mapColocateSelections.length;
  mapColocateMode=false;mapCombineMode=false;clearMapCombineSelection();renderTowerMap();scheduleCloudSync(200);
- mapCombineStatus('Colocation saved locally. Carrier towers remain separate at the same coordinates.');
+ mapCombineStatus('Saved '+count+' selected tower icons at one location. Carriers remain distinct. Await cloud sync.');
 }
 // Remove one carrier from a colocated site without deleting any records or moving coordinates.
 function uncolocateCarrier(keys){
@@ -1295,7 +1347,10 @@ function renderTowerMap(){
    const position=[anchor.latitude,anchor.longitude];
    // Shared multicarrier tower is not draggable: moving it would silently move unrelated carriers.
    // Individual towers remain draggable, including manually combined same-carrier sites.
-   const marker=L.marker(position,{draggable:!colocated,autoPan:true,icon}).addTo(towerMap);
+   const siteKeys=site.map(e=>keyOf(e.record));
+   const marker=L.marker(position,{draggable:false,autoPan:true,icon}).addTo(towerMap);
+   marker._towerMoveKeys=siteKeys;
+   if(!colocated&&armedTowerMoveKeys&&siteKeys.some(k=>armedTowerMoveKeys.includes(k)))marker.dragging.enable();
    const heading=colocated?'Colocated site · '+siteCarrierGroups(site).size+' carriers ('+site.length+' eNB/gNB records)':site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
    const entries=site.map((entry,i)=>{
      const r=entry.record,er=entry.effective;
@@ -1323,7 +1378,7 @@ function renderTowerMap(){
      const combine=document.createElement('button');combine.type='button';combine.textContent='Combine with another tower (same carrier)';
      combine.style.cssText='display:block;width:100%;margin-top:6px;padding:8px';
      combine.addEventListener('click',()=>startTowerMapAction(site,marker,false));
-     const colocate=document.createElement('button');colocate.type='button';colocate.textContent='Colocate with another tower';
+     const colocate=document.createElement('button');colocate.type='button';colocate.textContent='Colocate multiple towers';
      colocate.style.cssText='display:block;width:100%;margin-top:6px;padding:8px';
      colocate.addEventListener('click',()=>startTowerMapAction(site,marker,true));
      const edit=document.createElement('button');edit.type='button';edit.textContent='Edit this tower location';
@@ -1332,6 +1387,24 @@ function renderTowerMap(){
        marker.closePopup();showMapLocationControls(site[0].record);
        document.getElementById('mapEditCard')?.scrollIntoView({behavior:'smooth',block:'nearest'});
      });
+     if(!colocated){
+       const move=document.createElement('button');move.type='button';
+       move.textContent=marker.dragging.enabled()?'Cancel tower move':'Move this tower';
+       move.style.cssText='display:block;width:100%;margin-top:6px;padding:8px;background:#186f49;color:white';
+       move.addEventListener('click',()=>{
+         if(marker.dragging.enabled()){
+           marker.dragging.disable();armedTowerMoveKeys=null;
+           marker.closePopup();toast('Tower move canceled. Map scrolling is safe.');
+         }else{
+           towerMarkers.forEach(m=>m.dragging?.disable());
+           armedTowerMoveKeys=siteKeys.slice();
+           marker.dragging.enable();
+           marker.closePopup();
+           toast('Tower unlocked. Drag it to the new location; it locks again when released.');
+         }
+       });
+       actions.appendChild(move);
+     }
      actions.append(combine,colocate,edit);content.appendChild(actions);
    });
    if(colocated && site.some(e=>e.record.mapColocationGroup)){
@@ -1380,10 +1453,12 @@ function renderTowerMap(){
        content.appendChild(btn);
      });
    }
-   // Every saved pin can be held and dragged. Persist immediately on release.
+   // Pins are locked by default. Dragging is enabled only by popup action and locks after release.
    // Move only the records represented by this one carrier pin; never another carrier.
-   marker.on('dragstart',()=>{ marker.closePopup(); });
+   marker.on('dragstart',()=>{ if(!marker.dragging.enabled())return; marker.closePopup(); });
    marker.on('dragend',ev=>{
+     marker.dragging.disable();
+     armedTowerMoveKeys=null;
      const ll=ev.target.getLatLng();
      persistDraggedCarrierPin(site,ll.lat,ll.lng,marker);
    });
@@ -1393,7 +1468,7 @@ function renderTowerMap(){
  }
  updateTowerSearchHighlights();
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map tower icon${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move it. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
+ if(status)status.textContent=`${sites.length} map tower icon${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Tap a tower and choose Move this tower to unlock dragging. Dragging locks again after release. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
 }
 
 // Save a dragged marker as one atomic edit for the records represented by

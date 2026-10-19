@@ -1,4 +1,4 @@
-const CACHE='mctr-current58-roaming-aware-registry-mismatch-offline-sync-v1';
+const CACHE='mctr-save-confirmation-v77';
 
 const CORE=[
  './',

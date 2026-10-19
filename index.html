@@ -1038,14 +1038,43 @@ function separateMapPin(keys){
 }
 let mapTowerSearchMatches=new Set();
 function mapTowerTerms(){return [...new Set(String(document.getElementById('mapTowerSearch')?.value||'').split(/[;\n]+/).map(t=>t.trim().toLowerCase()).filter(Boolean))];}
+// Search supports one or many terms, matching ANY term against the complete registry.
+function mapTowerPlmn(r){
+ const e=getEffectiveRecord(r);
+ const explicit=[e.plmn,e.PLMN,e.mccmnc,e.mccMnc,e.networkPlmn,r.plmn].find(v=>v!==undefined&&v!==null&&String(v).trim());
+ if(explicit)return String(explicit).replace(/\D/g,'');
+ const fromRegistry=String(registryPlmnForRecord(e)||registryPlmnForRecord(r)||'').replace(/\D/g,'');
+ if(fromRegistry)return fromRegistry;
+ const n=String(e.carrier||r.carrier||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+ if(n.includes('starlink'))return '310830';
+ if(n.includes('t mobile')||n.includes('tmobile'))return '310260';
+ if(n.includes('strata'))return '312290';
+ if(n==='at t'||n==='att')return '310410';
+ if(n.includes('verizon'))return '311480';
+ if(n.includes('union wireless'))return '310020';
+ return '';
+}
 function mapTowerMatches(r,t){
- const e=getEffectiveRecord(r),plmn=registryPlmnForRecord(e);
- const values=[e.site,e.name,e.tower_name,e.carrier,plmn,e.eNB,e.gNB,e.cell_id,e.cellId,e.cellID].filter(x=>x!==undefined&&x!==null).map(x=>String(x).toLowerCase());
- if(values.some(x=>x.includes(t)))return true;
- if(/^\d+$/.test(t)&&String(e.radio||'').toUpperCase().includes('LTE')){try{return String(BigInt(t)/256n)===String(e.eNB||'')}catch(_){}}
+ const e=getEffectiveRecord(r),plmn=mapTowerPlmn(r);
+ const enb=String(e.eNB||r.eNB||'').trim();
+ const vals=[e.site,e.name,e.tower_name,e.carrier,plmn,e.eNB,e.gNB,e.cell_id,e.cellId,e.cellID,e.eci,e.ECI,r.cell_id,r.cellId,r.cellID];
+ const q=String(t).trim().toLowerCase();
+ // Numeric PLMNs are exact network identities, never accidental substring matches.
+ if(/^\d{5,6}$/.test(q)&&['310260','310830','312290','310410','311480','310020','31220'].includes(q))return plmn===q;
+ if(vals.some(v=>v!==undefined&&v!==null&&String(v).toLowerCase().includes(q)))return true;
+ // LTE Cell ID = eNB * 256 + sector; match entered ECI to its eNB.
+ if(/^\d+$/.test(q)&&enb){try{const n=BigInt(q);if(n>=256n&&String(n/256n)===enb)return true;}catch(_){}}
  return false;
 }
-function updateTowerSearchHighlights(){towerMarkers.forEach(m=>{const el=m.getElement();if(!el)return;const match=m._towerSearchKeys?.some(k=>mapTowerSearchMatches.has(k));el.style.filter=mapTowerSearchMatches.size?(match?'drop-shadow(0 0 5px #16c784)':'grayscale(1) opacity(.4)'):'';});}
+function updateTowerSearchHighlights(){
+ towerMarkers.forEach(m=>{
+  const el=m.getElement();if(!el)return;
+  const match=m._towerSearchKeys?.some(k=>mapTowerSearchMatches.has(k));
+  // Never recolor carrier pins gray. Nonmatches stay their official carrier color.
+  el.style.filter=mapTowerSearchMatches.size&&match?'drop-shadow(0 0 6px #16c784) drop-shadow(0 0 3px #16c784)':'';
+  el.style.opacity=mapTowerSearchMatches.size&&!match?'0.6':'1';
+ });
+}
 function clearTowerMapSearch(){document.getElementById('mapTowerSearch').value='';mapTowerSearchMatches.clear();document.getElementById('mapTowerSearchResults').replaceChildren();document.getElementById('mapTowerSearchStatus').textContent='Search cleared.';updateTowerSearchHighlights();}
 function searchTowersOnMap(){
  const terms=mapTowerTerms(),status=document.getElementById('mapTowerSearchStatus'),out=document.getElementById('mapTowerSearchResults');out.replaceChildren();mapTowerSearchMatches.clear();
@@ -1054,9 +1083,18 @@ function searchTowersOnMap(){
  const matches=DB.records.filter(r=>terms.some(t=>mapTowerMatches(r,t)));
  matches.forEach(r=>mapTowerSearchMatches.add(keyOf(r)));updateTowerSearchHighlights();
  const located=matches.filter(r=>{const e=getEffectiveRecord(r);return validCoord(e.latitude,-90,90)&&validCoord(e.longitude,-180,180)});
- status.textContent=matches.length+' matching records; '+located.length+' mapped. Matching pins are highlighted. Tap a result to zoom.';
+ status.textContent=matches.length+' matching records; '+located.length+' mapped. Carrier colors are preserved. Tap a result to zoom.';
  if(located.length&&towerMap){const pts=located.map(r=>{const e=getEffectiveRecord(r);return [Number(e.latitude),Number(e.longitude)]});if(pts.length===1)towerMap.setView(pts[0],15);else towerMap.fitBounds(L.latLngBounds(pts),{padding:[30,30],maxZoom:14});}
- matches.slice(0,150).forEach(r=>{const e=getEffectiveRecord(r),mapped=validCoord(e.latitude,-90,90)&&validCoord(e.longitude,-180,180),b=document.createElement('button');b.type='button';b.className='secondary';b.style.cssText='display:block;width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left;margin:5px 0;padding:9px';b.textContent=String(e.site||'Unnamed')+' · '+String(e.carrier||'Unknown')+' · '+String(e.eNB?'eNB '+e.eNB:e.gNB?'gNB '+e.gNB:'No ID')+(mapped?' · View pin':' · No map location');b.addEventListener('click',()=>{if(!mapped){status.textContent='This tower needs coordinates. Use Towers without map locations.';return;}towerMap.setView([Number(e.latitude),Number(e.longitude)],17);if(!mapCombineMode)towerMarkers.find(m=>m._towerSearchKeys?.includes(keyOf(r)))?.openPopup();});out.appendChild(b);});
+ matches.slice(0,150).forEach(r=>{
+  const e=getEffectiveRecord(r),mapped=validCoord(e.latitude,-90,90)&&validCoord(e.longitude,-180,180),b=document.createElement('button');
+  b.type='button';b.className='secondary';
+  b.style.cssText='display:flex;align-items:center;gap:9px;width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left;margin:5px 0;padding:9px;border-left:5px solid '+carrierMapColor(e.carrier,mapTowerPlmn(r));
+  const dot=document.createElement('span');dot.style.cssText='background:'+carrierMapColor(e.carrier,mapTowerPlmn(r))+';width:13px;height:13px;min-width:13px;border-radius:50%;display:inline-block';
+  const info=document.createElement('span');info.style.cssText='min-width:0;flex:1';
+  info.textContent=String(e.site||'Unnamed')+' · '+String(e.carrier||'Unknown')+' · PLMN '+(mapTowerPlmn(r)||'Unknown')+' · '+String(e.eNB?'eNB '+e.eNB:e.gNB?'gNB '+e.gNB:'No ID')+(mapped?' · View pin':' · No map location');
+  b.append(dot,info);
+  b.addEventListener('click',()=>{if(!mapped){status.textContent='This tower needs coordinates. Use Towers without map locations.';return;}towerMap.setView([Number(e.latitude),Number(e.longitude)],17);if(!mapCombineMode)towerMarkers.find(m=>m._towerSearchKeys?.includes(keyOf(r)))?.openPopup();});out.appendChild(b);
+ });
  if(matches.length>150)status.textContent+=' First 150 results listed.';
 }
 // Map-only address lookup: no registry writes, no automatic tower placement.

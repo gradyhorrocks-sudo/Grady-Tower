@@ -1095,14 +1095,14 @@ function renderUnmappedTowerList(){
  count.textContent=missing.length+' towers without locations · '+filtered.length+' shown';
  list.replaceChildren();
  for(const r of filtered.slice(0,250)){
-   const line=document.createElement('div');line.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid #39435f';
-   const desc=document.createElement('div');desc.style.cssText='min-width:0;overflow-wrap:anywhere';
+   const line=document.createElement('div');line.style.cssText='display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:10px 0;border-bottom:1px solid #39435f;width:100%;min-width:0';
+   const desc=document.createElement('div');desc.style.cssText='flex:1 1 230px;min-width:180px;max-width:100%;overflow-wrap:break-word;word-break:normal;white-space:normal';
    const name=document.createElement('b');name.textContent=r.site||'Unnamed tower';
    const details=document.createElement('div');details.className='small muted';
    details.textContent=[r.carrier||'Unknown carrier',r.radio||'',(r.eNB?'eNB '+r.eNB:r.gNB?'gNB '+r.gNB:'No ID')].filter(Boolean).join(' · ');
    desc.append(name,details);
    const button=document.createElement('button');button.type='button';button.textContent='Place on Map';
-   button.style.cssText='flex-shrink:0';button.addEventListener('click',()=>selectUnmappedTowerForMap(keyOf(r)));
+   button.style.cssText='flex:0 0 auto;width:auto;max-width:100%;min-width:130px;padding:10px 14px';button.addEventListener('click',()=>selectUnmappedTowerForMap(keyOf(r)));
    line.append(desc,button);list.appendChild(line);
  }
  if(filtered.length>250){const extra=document.createElement('div');extra.className='small muted';extra.textContent='Showing first 250 results. Filter to find another tower.';list.appendChild(extra);}

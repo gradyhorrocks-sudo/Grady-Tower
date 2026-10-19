@@ -492,8 +492,8 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <div id="mapStatus" class="small muted mapHint"></div>
 <div class="card" style="margin-top:12px;padding:12px">
  <b>Combine pins on the map</b>
- <p class="small muted">Tap Combine Pins, then tap the first pin. A green check mark confirms it is selected before you tap the next pin. Only pins belonging to the same carrier can combine. Your saved coordinates never change when combining.</p>
- <div class="row"><button type="button" id="mapCombineModeButton" onclick="toggleMapCombineMode()">Combine Pins</button><button type="button" class="secondary" onclick="cancelMapCombineMode()">Cancel</button></div>
+ <p class="small muted">Tap Combine Pins, select two pins, then tap Save Combined Pins. Both selected pins display green check marks. Only pins belonging to the same carrier can combine. Your saved coordinates never change when combining.</p>
+ <div class="row"><button type="button" id="mapCombineModeButton" onclick="toggleMapCombineMode()">Combine Pins</button><button type="button" id="saveMapCombineButton" class="good" onclick="saveSelectedMapPins()" disabled>Save Combined Pins</button><button type="button" class="secondary" onclick="cancelMapCombineMode()">Cancel</button></div>
  <div id="mapCombineStatus" class="small muted" role="status" aria-live="polite">Tap Combine Pins to begin.</div>
 </div>
 
@@ -958,55 +958,72 @@ function samePhysicalSite(a,b){
  return !!(x&&y&&x===y&&sameMapCarrier(a,b));
 }
 let mapCombineMode=false;
-let mapCombineFirstKeys=null;
-let mapCombineFirstMarker=null;
+let mapCombineFirstKeys=null, mapCombineSecondKeys=null;
+let mapCombineFirstMarker=null, mapCombineSecondMarker=null;
 function mapCombineStatus(message){
  const el=document.getElementById('mapCombineStatus');if(el)el.textContent=message;
- const btn=document.getElementById('mapCombineModeButton');if(btn)btn.textContent=mapCombineMode?'Select second pin…':'Combine Pins';
+ const btn=document.getElementById('mapCombineModeButton');if(btn)btn.textContent=mapCombineMode?'Selecting pins…':'Combine Pins';
+ const save=document.getElementById('saveMapCombineButton');if(save)save.disabled=!(mapCombineMode&&mapCombineFirstKeys&&mapCombineSecondKeys);
+}
+function unmarkMapCombineMarker(marker){
+ const el=marker?.getElement();if(el){el.classList.remove('map-combine-selected');el.querySelector('.map-combine-check')?.remove();}
 }
 function clearMapCombineSelection(){
- if(mapCombineFirstMarker){
-   const el=mapCombineFirstMarker.getElement();
-   if(el){el.classList.remove('map-combine-selected');el.querySelector('.map-combine-check')?.remove();}
- }
- mapCombineFirstMarker=null;mapCombineFirstKeys=null;
+ unmarkMapCombineMarker(mapCombineFirstMarker);unmarkMapCombineMarker(mapCombineSecondMarker);
+ mapCombineFirstMarker=null;mapCombineSecondMarker=null;mapCombineFirstKeys=null;mapCombineSecondKeys=null;
+ const save=document.getElementById('saveMapCombineButton');if(save)save.disabled=true;
 }
-function markMapCombineSelection(marker){
- clearMapCombineSelection();
- mapCombineFirstMarker=marker;
- const el=marker?.getElement();
- if(el){
-   el.classList.add('map-combine-selected');
-   const check=document.createElement('span');
-   check.className='map-combine-check';
-   check.textContent='✓';
-   check.setAttribute('aria-label','First pin selected');
-   el.appendChild(check);
- }
+function markMapCombineMarker(marker,label){
+ const el=marker?.getElement();if(!el)return;
+ el.classList.add('map-combine-selected');
+ const check=document.createElement('span');check.className='map-combine-check';check.textContent='✓';
+ check.setAttribute('aria-label',label);el.appendChild(check);
 }
-function toggleMapCombineMode(){mapCombineMode=true;clearMapCombineSelection();mapCombineStatus('Tap the first pin. A green ✓ will confirm your selection.');}
-function cancelMapCombineMode(){mapCombineMode=false;clearMapCombineSelection();mapCombineStatus('Tap Combine Pins to begin.');}
-function mapRecordsForKeys(keys){const set=new Set(keys);return DB.records.filter(r=>set.has(keyOf(r)));}
-function mapPinTapped(site,marker){
- if(!mapCombineMode)return false;
- const keys=site.map(e=>keyOf(e.record));
- if(!mapCombineFirstKeys){mapCombineFirstKeys=keys;markMapCombineSelection(marker);mapCombineStatus('✓ First pin selected. Now tap the second pin from the same carrier.');return true;}
- if(keys.some(k=>mapCombineFirstKeys.includes(k))){mapCombineStatus('That is the same pin. Tap another pin.');return true;}
- const first=mapRecordsForKeys(mapCombineFirstKeys),second=mapRecordsForKeys(keys);
- if(!first.length||!second.length){cancelMapCombineMode();return true;}
+function toggleMapCombineMode(){mapCombineMode=true;clearMapCombineSelection();mapCombineStatus('Tap the first tower pin.');}
+function cancelMapCombineMode(){mapCombineMode=false;clearMapCombineSelection();mapCombineStatus('Selection canceled. Tap Combine Pins to begin.');}
+function mapRecordsForKeys(keys){const set=new Set(keys||[]);return DB.records.filter(r=>set.has(keyOf(r)));}
+function mapCombineMembers(){
+ const first=mapRecordsForKeys(mapCombineFirstKeys),second=mapRecordsForKeys(mapCombineSecondKeys);
+ if(!first.length||!second.length)return null;
  const selected=[...new Map([...first,...second].map(r=>[keyOf(r),r])).values()];
  const groupIds=new Set(selected.map(r=>r.mapPinGroup).filter(Boolean));
  const members=DB.records.filter(r=>selected.includes(r)||(r.mapPinGroup&&groupIds.has(r.mapPinGroup)));
  const entries=members.map(record=>({record,effective:record}));
- if(!entries.every(e=>sameMapCarrier(entries[0],e))){mapCombineStatus('Cannot combine different carriers. Tap another pin from the same carrier.');return true;}
+ if(!entries.every(e=>sameMapCarrier(entries[0],e)))return null;
+ return {selected,members};
+}
+function mapPinTapped(site,marker){
+ if(!mapCombineMode)return false;
+ const keys=site.map(e=>keyOf(e.record));
+ if(!mapCombineFirstKeys){
+  mapCombineFirstKeys=keys;mapCombineFirstMarker=marker;
+  markMapCombineMarker(marker,'First pin selected');
+  mapCombineStatus('✓ First tower selected. Tap the second tower pin.');return true;
+ }
+ if(keys.some(k=>mapCombineFirstKeys.includes(k))){mapCombineStatus('This is the first pin. Select a different tower.');return true;}
+ const first=mapRecordsForKeys(mapCombineFirstKeys),second=mapRecordsForKeys(keys);
+ if(!first.length||!second.length){mapCombineStatus('Tower selection expired. Tap Cancel and try again.');return true;}
+ const candidates=[...first,...second].map(record=>({record,effective:record}));
+ if(!candidates.every(e=>sameMapCarrier(candidates[0],e))){mapCombineStatus('Different carriers cannot combine. Select a tower from the same carrier.');return true;}
+ unmarkMapCombineMarker(mapCombineSecondMarker);
+ mapCombineSecondKeys=keys;mapCombineSecondMarker=marker;
+ markMapCombineMarker(marker,'Second pin selected');
+ if(!mapCombineMembers()){
+  unmarkMapCombineMarker(mapCombineSecondMarker);mapCombineSecondKeys=null;mapCombineSecondMarker=null;
+  mapCombineStatus('These groups contain different carriers and cannot combine.');return true;
+ }
+ mapCombineStatus('✓ Both towers selected. Tap Save Combined Pins to confirm.');return true;
+}
+function saveSelectedMapPins(){
+ if(!mapCombineMode||!mapCombineFirstKeys||!mapCombineSecondKeys){mapCombineStatus('Select two tower pins first.');return;}
+ const group=mapCombineMembers();if(!group){mapCombineStatus('Cannot save: tower records missing or carriers do not match.');return;}
+ const {selected,members}=group;
  const groupId=selected.find(r=>r.mapPinGroup)?.mapPinGroup||'manual-'+Date.now().toString(36);
  const previous=members.map(r=>({r,old:r.mapPinGroup}));
  try{members.forEach(r=>r.mapPinGroup=groupId);saveLocal('Combine pins from map');}
- catch(err){previous.forEach(({r,old})=>{if(old)r.mapPinGroup=old;else delete r.mapPinGroup;});mapCombineStatus('Could not save: '+String(err?.message||err));return true;}
- mapCombineMode=false;clearMapCombineSelection();
- renderTowerMap();scheduleCloudSync(200);
- mapCombineStatus('Pins combined. Coordinates unchanged. Wait for Synced ✓.');
- return true;
+ catch(err){previous.forEach(({r,old})=>{if(old)r.mapPinGroup=old;else delete r.mapPinGroup;});mapCombineStatus('Save failed: '+String(err?.message||err));return;}
+ mapCombineMode=false;clearMapCombineSelection();renderTowerMap();scheduleCloudSync(200);
+ mapCombineStatus('Combined pins saved locally. Coordinates unchanged. Wait for cloud sync.');
 }
 function separateMapPin(keys){
  const records=mapRecordsForKeys(keys);

@@ -1301,7 +1301,7 @@ function renderUnmappedTowerList(){
  if(!list||!DB)return;
  const query=String(document.getElementById('unmappedTowerFilter')?.value||'').trim().toLowerCase();
  // Use committed coordinates, not unsaved staging overlays, to decide whether a tower is mapped.
- const missing=DB.records.filter(r=>!validCoord(r.latitude,-90,90)||!validCoord(r.longitude,-180,180));
+ const missing=DB.records.filter(r=>!r.__delete&&!pendingTowerChanges[keyOf(r)]?.changes?.__delete&&(!validCoord(r.latitude,-90,90)||!validCoord(r.longitude,-180,180)));
  const filtered=missing.filter(r=>[r.site,r.carrier,r.radio,r.eNB,r.gNB].some(x=>String(x||'').toLowerCase().includes(query)));
  count.textContent=missing.length+' towers without locations · '+filtered.length+' shown';
  list.replaceChildren();
@@ -1328,6 +1328,7 @@ function renderTowerMap(){
  const sites=[];
  let located=0;
  for(const r of DB.records){
+   if(r.__delete || pendingTowerChanges[keyOf(r)]?.changes?.__delete)continue;
    const er=getEffectiveRecord(r);
    if(!validCoord(er.latitude,-90,90)||!validCoord(er.longitude,-180,180))continue;
    located++;
@@ -1875,6 +1876,12 @@ function saveAllPendingChanges(){
 
       if(idx>=0){
         DB.records[idx]={...DB.records[idx],...changes};
+        if(changes.__delete){
+          // A sync tombstone is intentionally retained, but invisible in the app.
+          // Removing the record entirely would allow the cloud's merge-by-key
+          // logic to resurrect it on the next download.
+          DB.records[idx]._syncModifiedAt=Math.max(Date.now(),Number(DB.records[idx]._syncModifiedAt||0)+1);
+        }
         saved++;
       }
     }
@@ -1905,7 +1912,7 @@ function saveAllPendingChanges(){
  refreshUniversalLookupIfPresent();
     if(towerMap)renderTowerMap();
 
-    showSaveAllSuccess(`✓ ${saved} change${saved===1?'':'s'} saved on this device. Cloud confirmation is pending until Sync says Synced ✓.`);
+    showSaveAllSuccess(`✓ ${saved} change${saved===1?'':'s'} saved on this device. Deleted towers are hidden and protected against cloud resurrection. Cloud confirmation is pending until Sync says Synced ✓.`);
   }catch(e){
     alert('Could not save all changes: '+String(e&&e.message||e));
   }
@@ -2840,7 +2847,7 @@ function mergeCloudRegistry(local,remote){
    }
    const lt=Number(lr._syncModifiedAt||0);
    const rt=Number(rr._syncModifiedAt||0);
-   if(rt>lt){
+   if(rt>lt && !lr.__delete){
      const i=out.records.indexOf(lr);
      if(i>=0)out.records[i]=rr;
      map.set(k,rr);
@@ -3494,14 +3501,15 @@ function renderRegistry(){
  if(!DB)return;
  const q=document.getElementById('q').value.toLowerCase().trim();
  const rows=DB.records.filter(r=>{
+   if(r.__delete||pendingTowerChanges[keyOf(r)]?.changes?.__delete)return false;
    if(!q)return true;
    if(['unverified','unknown','provisional'].includes(q))return isUnverifiedTower(r);
    if(['unnamed','unmapped','no name'].includes(q))return isUnnamedTower(r);
    return JSON.stringify(r).toLowerCase().includes(q);
  });
- const lte=DB.records.filter(r=>r.radio==='LTE'&&r.carrier!=='T-Mobile Starlink').length;
- const nr=DB.records.filter(r=>r.radio==='5G'&&r.carrier!=='T-Mobile Starlink').length;
- const sat=DB.records.filter(r=>r.carrier==='T-Mobile Starlink').length;
+ const lte=DB.records.filter(r=>!r.__delete&&r.radio==='LTE'&&r.carrier!=='T-Mobile Starlink').length;
+ const nr=DB.records.filter(r=>!r.__delete&&r.radio==='5G'&&r.carrier!=='T-Mobile Starlink').length;
+ const sat=DB.records.filter(r=>!r.__delete&&r.carrier==='T-Mobile Starlink').length;
  document.getElementById('counts').innerHTML=`<div class="countbox"><b>${lte}</b>LTE IDs</div><div class="countbox"><b>${nr}</b>5G IDs</div><div class="countbox"><b>${lte+nr}</b>Terrestrial</div><div class="countbox"><b>${sat}</b>Starlink</div>`;
  document.getElementById('records').innerHTML=rows.map(r=>`<div class="record">
  <b>${esc(r.site)}</b><br><span class="badge">${esc(r.carrier)}</span><span class="badge">${esc(r.radio)}</span><span class="badge">${esc(r.status)}</span>${pendingTowerChanges[keyOf(r)]?'<span class="badge">Pending change</span>':''}
@@ -3763,7 +3771,9 @@ function deleteRecord(k){
  const r=DB.records.find(x=>keyOf(x)===k); if(!r)return;
  if(!confirm(`Mark ${r.site} (${r.eNB||r.gNB}) for deletion? It will not be removed until Save All Changes.`))return;
  stageExistingTowerChange(r,{__delete:true},'Delete tower');
- toast('Deletion added to pending changes.');
+ toast('Deletion pending. Tap Save All Changes to remove the tower from the map and registry.');
+ if(towerMap)renderTowerMap();
+ renderRegistry();
  refreshUniversalLookupIfPresent();
 }
 function downloadSafeTowerBackup(){

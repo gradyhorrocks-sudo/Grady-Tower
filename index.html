@@ -258,7 +258,7 @@ main, .container, .content{
 async function registerTowerServiceWorker(){
   if(!('serviceWorker' in navigator)) return null;
   try{
-    const swUrl=new URL('./sw.js?v=current48',location.href).href;
+    const swUrl=new URL('./sw.js?v=offline-map-v99',location.href).href;
     const reg=await navigator.serviceWorker.register(swUrl,{scope:'./'});
     await navigator.serviceWorker.ready;
     return reg;
@@ -270,6 +270,10 @@ async function registerTowerServiceWorker(){
 window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 </script>
 
+<style id="map-combine-check-style">
+.leaflet-marker-icon.map-combine-selected{filter:drop-shadow(0 0 5px #22c55e);}
+.leaflet-marker-icon .map-combine-check{position:absolute;right:-9px;top:-11px;display:flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;background:#15803d;color:#fff;font-size:19px;font-weight:900;line-height:1;border:2px solid white;box-shadow:0 1px 6px #0008;z-index:9999;pointer-events:none;}
+</style>
 </head>
 <body>
 
@@ -469,11 +473,26 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <button class="secondary" onclick="fitTowerMap()">Show All Saved Towers</button>
 <button class="secondary" onclick="centerMapOnDevice()">My Current Location</button>
 </div>
+<div class="card" style="margin-top:12px;padding:12px">
+ <b>Find an address or coordinates</b>
+ <p class="small muted">Search an address while online, or enter latitude, longitude. Searching only moves the map; it never changes a tower location until you explicitly save it.</p>
+ <div class="row"><input id="mapPlaceSearch" style="flex:1;min-width:190px" aria-label="Search address or coordinates" placeholder="Address or latitude, longitude" onkeydown="if(event.key==='Enter'){event.preventDefault();searchMapPlace();}"><button type="button" onclick="searchMapPlace()">Search Map</button></div>
+ <div id="mapPlaceSearchStatus" class="small muted" role="status" aria-live="polite"></div>
+ <div id="mapPlaceSearchResults"></div>
+</div>
 <div id="towerMap" style="margin-top:12px"></div>
+<div class="card" style="margin-top:12px;padding:12px">
+ <h3>Towers without map locations</h3>
+ <p class="small muted">Existing and newly added towers without valid coordinates appear here. Select a tower, then tap the map and Save Location. No duplicate tower is created.</p>
+ <input id="unmappedTowerFilter" aria-label="Filter unmapped towers" placeholder="Filter by tower, carrier or eNB/gNB" oninput="renderUnmappedTowerList()">
+ <div id="unmappedTowerCount" class="small muted" style="margin:8px 0"></div>
+ <div id="unmappedTowerList" style="max-height:320px;overflow-y:auto"></div>
+</div>
+<div id="offlineMapHint" class="small muted" style="margin-top:8px" role="status">Offline map: areas you view online are saved for later offline viewing. Pan and zoom around important tower sites while connected. Unvisited areas require internet.</div>
 <div id="mapStatus" class="small muted mapHint"></div>
 <div class="card" style="margin-top:12px;padding:12px">
  <b>Combine pins on the map</b>
- <p class="small muted">Tap Combine Pins, then tap two pins on the map. Only pins belonging to the same carrier can combine. Your saved coordinates never change when combining.</p>
+ <p class="small muted">Tap Combine Pins, then tap the first pin. A green check mark confirms it is selected before you tap the next pin. Only pins belonging to the same carrier can combine. Your saved coordinates never change when combining.</p>
  <div class="row"><button type="button" id="mapCombineModeButton" onclick="toggleMapCombineMode()">Combine Pins</button><button type="button" class="secondary" onclick="cancelMapCombineMode()">Cancel</button></div>
  <div id="mapCombineStatus" class="small muted" role="status" aria-live="polite">Tap Combine Pins to begin.</div>
 </div>
@@ -654,6 +673,7 @@ function showTab(name,btn){
  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
  if(btn)btn.classList.add('active');
  if(name==='registry') renderRegistry();
+ if(name==='map' && DB)renderUnmappedTowerList();
 }
 
 function goBackFromAddEdit(){
@@ -857,6 +877,11 @@ function parseMapsLocation(raw){
 function ensureTowerMap(){
  if(towerMap || !window.L)return;
  towerMap=L.map('towerMap').setView([40.3,-109.5],8);
+ const mapHint=document.getElementById('offlineMapHint');
+ function updateMapOfflineHint(){if(mapHint)mapHint.textContent=navigator.onLine?'Offline map ready to cache: pan and zoom around the areas you need while connected. Previously viewed map tiles remain available offline (subject to device storage).':'Offline map mode: previously viewed tiles are available. Blank or labeled areas were not cached; pins still use your saved coordinates.';}
+ window.addEventListener('online',updateMapOfflineHint);
+ window.addEventListener('offline',updateMapOfflineHint);
+ updateMapOfflineHint();
 
  streetLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
    maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
@@ -934,17 +959,38 @@ function samePhysicalSite(a,b){
 }
 let mapCombineMode=false;
 let mapCombineFirstKeys=null;
+let mapCombineFirstMarker=null;
 function mapCombineStatus(message){
  const el=document.getElementById('mapCombineStatus');if(el)el.textContent=message;
  const btn=document.getElementById('mapCombineModeButton');if(btn)btn.textContent=mapCombineMode?'Select second pin…':'Combine Pins';
 }
-function toggleMapCombineMode(){mapCombineMode=true;mapCombineFirstKeys=null;mapCombineStatus('Tap the first pin on the map.');}
-function cancelMapCombineMode(){mapCombineMode=false;mapCombineFirstKeys=null;mapCombineStatus('Tap Combine Pins to begin.');}
+function clearMapCombineSelection(){
+ if(mapCombineFirstMarker){
+   const el=mapCombineFirstMarker.getElement();
+   if(el){el.classList.remove('map-combine-selected');el.querySelector('.map-combine-check')?.remove();}
+ }
+ mapCombineFirstMarker=null;mapCombineFirstKeys=null;
+}
+function markMapCombineSelection(marker){
+ clearMapCombineSelection();
+ mapCombineFirstMarker=marker;
+ const el=marker?.getElement();
+ if(el){
+   el.classList.add('map-combine-selected');
+   const check=document.createElement('span');
+   check.className='map-combine-check';
+   check.textContent='✓';
+   check.setAttribute('aria-label','First pin selected');
+   el.appendChild(check);
+ }
+}
+function toggleMapCombineMode(){mapCombineMode=true;clearMapCombineSelection();mapCombineStatus('Tap the first pin. A green ✓ will confirm your selection.');}
+function cancelMapCombineMode(){mapCombineMode=false;clearMapCombineSelection();mapCombineStatus('Tap Combine Pins to begin.');}
 function mapRecordsForKeys(keys){const set=new Set(keys);return DB.records.filter(r=>set.has(keyOf(r)));}
-function mapPinTapped(site){
+function mapPinTapped(site,marker){
  if(!mapCombineMode)return false;
  const keys=site.map(e=>keyOf(e.record));
- if(!mapCombineFirstKeys){mapCombineFirstKeys=keys;mapCombineStatus('First pin selected. Tap a second pin from the same carrier.');return true;}
+ if(!mapCombineFirstKeys){mapCombineFirstKeys=keys;markMapCombineSelection(marker);mapCombineStatus('✓ First pin selected. Now tap the second pin from the same carrier.');return true;}
  if(keys.some(k=>mapCombineFirstKeys.includes(k))){mapCombineStatus('That is the same pin. Tap another pin.');return true;}
  const first=mapRecordsForKeys(mapCombineFirstKeys),second=mapRecordsForKeys(keys);
  if(!first.length||!second.length){cancelMapCombineMode();return true;}
@@ -957,7 +1003,7 @@ function mapPinTapped(site){
  const previous=members.map(r=>({r,old:r.mapPinGroup}));
  try{members.forEach(r=>r.mapPinGroup=groupId);saveLocal('Combine pins from map');}
  catch(err){previous.forEach(({r,old})=>{if(old)r.mapPinGroup=old;else delete r.mapPinGroup;});mapCombineStatus('Could not save: '+String(err?.message||err));return true;}
- mapCombineMode=false;mapCombineFirstKeys=null;
+ mapCombineMode=false;clearMapCombineSelection();
  renderTowerMap();scheduleCloudSync(200);
  mapCombineStatus('Pins combined. Coordinates unchanged. Wait for Synced ✓.');
  return true;
@@ -973,8 +1019,98 @@ function separateMapPin(keys){
  renderTowerMap();scheduleCloudSync(200);
  mapCombineStatus('Pins separated. Coordinates unchanged. Wait for Synced ✓.');
 }
+// Map-only address lookup: no registry writes, no automatic tower placement.
+let lastMapGeocodeTime=0;
+async function searchMapPlace(){
+ const field=document.getElementById('mapPlaceSearch');
+ const status=document.getElementById('mapPlaceSearchStatus');
+ const results=document.getElementById('mapPlaceSearchResults');
+ const raw=String(field?.value||'').trim();
+ if(results)results.replaceChildren();
+ if(!raw){status.textContent='Enter an address or coordinates.';return;}
+ ensureTowerMap();
+ const direct=parseMapsLocation(raw);
+ if(direct){
+   towerMap.setView([direct.lat,direct.lon],17);
+   status.textContent='Map centered at '+direct.lat.toFixed(6)+', '+direct.lon.toFixed(6)+'. No tower coordinates changed.';
+   return;
+ }
+ if(!navigator.onLine){status.textContent='Address search needs internet. Coordinates work offline.';return;}
+ const now=Date.now();
+ if(now-lastMapGeocodeTime<1200){status.textContent='Please wait a moment before another address search.';return;}
+ lastMapGeocodeTime=now;
+ status.textContent='Searching addresses…';
+ try{
+   const controller=new AbortController();
+   const timeout=setTimeout(()=>controller.abort(),10000);
+   let response;
+   try{response=await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=0&q='+encodeURIComponent(raw),{headers:{'Accept':'application/json'},signal:controller.signal});}
+   finally{clearTimeout(timeout);}
+   if(!response.ok)throw Error('Address service returned '+response.status);
+   const matches=await response.json();
+   if(!Array.isArray(matches)||!matches.length){status.textContent='No address found. Try a more specific search or coordinates.';return;}
+   status.textContent='Select a result to center the map. Locations are not saved automatically.';
+   for(const place of matches){
+     const lat=Number(place.lat),lon=Number(place.lon);
+     if(!validCoord(lat,-90,90)||!validCoord(lon,-180,180))continue;
+     const btn=document.createElement('button');
+     btn.type='button';btn.className='secondary';
+     btn.style.cssText='display:block;width:100%;text-align:left;margin:6px 0;white-space:normal';
+     btn.textContent=String(place.display_name||'Map result');
+     btn.addEventListener('click',()=>{
+       towerMap.setView([lat,lon],16);
+       results.replaceChildren();
+       status.textContent='Map centered at '+lat.toFixed(6)+', '+lon.toFixed(6)+'. Tap the map to preview a location only if a tower is selected.';
+     });
+     results.appendChild(btn);
+   }
+ }catch(err){status.textContent='Address search unavailable. Check internet or enter coordinates. '+String(err?.message||'');}
+}
+function selectUnmappedTowerForMap(key){
+ if(!DB)return;
+ const record=DB.records.find(r=>keyOf(r)===key);
+ if(!record){renderUnmappedTowerList();return;}
+ if(pendingTowerLocationChange){
+   const ok=confirm('A location preview is not saved. Discard it and select this tower?');
+   if(!ok)return;
+   cancelPendingTowerLocation();
+ }
+ activeMapEditRecord=record;
+ mapCombineMode=false;clearMapCombineSelection();
+ const idField=document.getElementById('mapEditId');
+ if(idField)idField.value=String(record.eNB||record.gNB||'');
+ ensureTowerMap();renderTowerMap();
+ const status=document.getElementById('mapEditStatus');
+ if(status)status.textContent='Selected '+(record.site||'Unnamed tower')+' ('+record.carrier+'). Search an address or coordinates above, then tap the map and Save Location.';
+ const ms=document.getElementById('mapStatus');
+ if(ms)ms.textContent='Selected '+(record.site||'tower')+' · '+record.carrier+'. Tap the map to preview its location.';
+ document.getElementById('towerMap')?.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function renderUnmappedTowerList(){
+ const list=document.getElementById('unmappedTowerList'),count=document.getElementById('unmappedTowerCount');
+ if(!list||!DB)return;
+ const query=String(document.getElementById('unmappedTowerFilter')?.value||'').trim().toLowerCase();
+ const missing=DB.records.filter(r=>{const e=getEffectiveRecord(r);return !validCoord(e.latitude,-90,90)||!validCoord(e.longitude,-180,180);});
+ const filtered=missing.filter(r=>[r.site,r.carrier,r.radio,r.eNB,r.gNB].some(x=>String(x||'').toLowerCase().includes(query)));
+ count.textContent=missing.length+' towers without locations · '+filtered.length+' shown';
+ list.replaceChildren();
+ for(const r of filtered.slice(0,250)){
+   const line=document.createElement('div');line.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px solid #39435f';
+   const desc=document.createElement('div');desc.style.cssText='min-width:0;overflow-wrap:anywhere';
+   const name=document.createElement('b');name.textContent=r.site||'Unnamed tower';
+   const details=document.createElement('div');details.className='small muted';
+   details.textContent=[r.carrier||'Unknown carrier',r.radio||'',(r.eNB?'eNB '+r.eNB:r.gNB?'gNB '+r.gNB:'No ID')].filter(Boolean).join(' · ');
+   desc.append(name,details);
+   const button=document.createElement('button');button.type='button';button.textContent='Place on Map';
+   button.style.cssText='flex-shrink:0';button.addEventListener('click',()=>selectUnmappedTowerForMap(keyOf(r)));
+   line.append(desc,button);list.appendChild(line);
+ }
+ if(filtered.length>250){const extra=document.createElement('div');extra.className='small muted';extra.textContent='Showing first 250 results. Filter to find another tower.';list.appendChild(extra);}
+ if(!filtered.length){const empty=document.createElement('div');empty.className='small muted';empty.textContent='No matching unmapped towers.';list.appendChild(empty);}
+}
 function renderTowerMap(){
  if(!towerMap||!DB)return;
+ renderUnmappedTowerList();
  towerMarkers.forEach(m=>m.remove());
  towerMarkers=[];
  activeMapEditMarker=null;
@@ -1013,7 +1149,7 @@ function renderTowerMap(){
      '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+entries+
      (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:true,closeButton:true});
    marker.on('click',()=>{
-     if(mapPinTapped(site)){marker.closePopup();return;}
+     if(mapPinTapped(site,marker)){marker.closePopup();return;}
      marker.openPopup();
    });
    if(site.some(e=>e.record.mapPinGroup)){

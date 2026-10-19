@@ -480,7 +480,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
  <div id="mapPlaceSearchStatus" class="small muted" role="status" aria-live="polite"></div>
  <div id="mapPlaceSearchResults"></div>
 </div>
-<div id="towerMap" style="margin-top:12px"></div>
+<div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div>
 <div class="card" style="margin-top:12px;padding:12px">
  <h3>Towers without map locations</h3>
  <p class="small muted">Existing and newly added towers without valid coordinates appear here. Select a tower, then tap the map and Save Location. No duplicate tower is created.</p>
@@ -1036,6 +1036,29 @@ function separateMapPin(keys){
  renderTowerMap();scheduleCloudSync(200);
  mapCombineStatus('Pins separated. Coordinates unchanged. Wait for Synced ✓.');
 }
+let mapTowerSearchMatches=new Set();
+function mapTowerTerms(){return [...new Set(String(document.getElementById('mapTowerSearch')?.value||'').split(/[;\n]+/).map(t=>t.trim().toLowerCase()).filter(Boolean))];}
+function mapTowerMatches(r,t){
+ const e=getEffectiveRecord(r),plmn=registryPlmnForRecord(e);
+ const values=[e.site,e.name,e.tower_name,e.carrier,plmn,e.eNB,e.gNB,e.cell_id,e.cellId,e.cellID].filter(x=>x!==undefined&&x!==null).map(x=>String(x).toLowerCase());
+ if(values.some(x=>x.includes(t)))return true;
+ if(/^\d+$/.test(t)&&String(e.radio||'').toUpperCase().includes('LTE')){try{return String(BigInt(t)/256n)===String(e.eNB||'')}catch(_){}}
+ return false;
+}
+function updateTowerSearchHighlights(){towerMarkers.forEach(m=>{const el=m.getElement();if(!el)return;const match=m._towerSearchKeys?.some(k=>mapTowerSearchMatches.has(k));el.style.filter=mapTowerSearchMatches.size?(match?'drop-shadow(0 0 5px #16c784)':'grayscale(1) opacity(.4)'):'';});}
+function clearTowerMapSearch(){document.getElementById('mapTowerSearch').value='';mapTowerSearchMatches.clear();document.getElementById('mapTowerSearchResults').replaceChildren();document.getElementById('mapTowerSearchStatus').textContent='Search cleared.';updateTowerSearchHighlights();}
+function searchTowersOnMap(){
+ const terms=mapTowerTerms(),status=document.getElementById('mapTowerSearchStatus'),out=document.getElementById('mapTowerSearchResults');out.replaceChildren();mapTowerSearchMatches.clear();
+ if(!terms.length){status.textContent='Enter one or more tower names, PLMNs, eNBs or Cell IDs.';updateTowerSearchHighlights();return;}
+ if(!DB?.records){status.textContent='Registry is not loaded.';return;}
+ const matches=DB.records.filter(r=>terms.some(t=>mapTowerMatches(r,t)));
+ matches.forEach(r=>mapTowerSearchMatches.add(keyOf(r)));updateTowerSearchHighlights();
+ const located=matches.filter(r=>{const e=getEffectiveRecord(r);return validCoord(e.latitude,-90,90)&&validCoord(e.longitude,-180,180)});
+ status.textContent=matches.length+' matching records; '+located.length+' mapped. Matching pins are highlighted. Tap a result to zoom.';
+ if(located.length&&towerMap){const pts=located.map(r=>{const e=getEffectiveRecord(r);return [Number(e.latitude),Number(e.longitude)]});if(pts.length===1)towerMap.setView(pts[0],15);else towerMap.fitBounds(L.latLngBounds(pts),{padding:[30,30],maxZoom:14});}
+ matches.slice(0,150).forEach(r=>{const e=getEffectiveRecord(r),mapped=validCoord(e.latitude,-90,90)&&validCoord(e.longitude,-180,180),b=document.createElement('button');b.type='button';b.className='secondary';b.style.cssText='display:block;width:100%;white-space:normal;overflow-wrap:anywhere;text-align:left;margin:5px 0;padding:9px';b.textContent=String(e.site||'Unnamed')+' · '+String(e.carrier||'Unknown')+' · '+String(e.eNB?'eNB '+e.eNB:e.gNB?'gNB '+e.gNB:'No ID')+(mapped?' · View pin':' · No map location');b.addEventListener('click',()=>{if(!mapped){status.textContent='This tower needs coordinates. Use Towers without map locations.';return;}towerMap.setView([Number(e.latitude),Number(e.longitude)],17);if(!mapCombineMode)towerMarkers.find(m=>m._towerSearchKeys?.includes(keyOf(r)))?.openPopup();});out.appendChild(b);});
+ if(matches.length>150)status.textContent+=' First 150 results listed.';
+}
 // Map-only address lookup: no registry writes, no automatic tower placement.
 let lastMapGeocodeTime=0;
 async function searchMapPlace(){
@@ -1189,8 +1212,10 @@ function renderTowerMap(){
      persistDraggedCarrierPin(site,ll.lat,ll.lng,marker);
    });
    if(selected){activeMapEditMarker=marker;marker.openPopup();}
+   marker._towerSearchKeys=site.map(e=>keyOf(e.record));
    towerMarkers.push(marker);
  }
+ updateTowerSearchHighlights();
  const status=document.getElementById('mapStatus');
  if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move it. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
 }

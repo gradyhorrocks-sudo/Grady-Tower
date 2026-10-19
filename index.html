@@ -464,13 +464,19 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <section id="tab-map" class="hidden">
 <div class="card">
 <h3>Tower Map</h3>
-<p class="muted small">Saved tower coordinates appear as pins. Use the map control to switch between Street Map and Satellite imagery. Tap a pin to view the tower, or edit a tower to add coordinates.</p>
+<p class="muted small">Saved tower coordinates appear as pins. Hold and drag a pin to move it; release to save and sync. Tap a pin to see all records for that carrier at the site. Different carriers remain separate.</p>
 <div class="row">
 <button class="secondary" onclick="fitTowerMap()">Show All Saved Towers</button>
 <button class="secondary" onclick="centerMapOnDevice()">My Current Location</button>
 </div>
 <div id="towerMap" style="margin-top:12px"></div>
 <div id="mapStatus" class="small muted mapHint"></div>
+<div class="card" style="margin-top:12px;padding:12px">
+ <b>Combine pins on the map</b>
+ <p class="small muted">Tap Combine Pins, then tap two pins on the map. Only pins belonging to the same carrier can combine. Your saved coordinates never change when combining.</p>
+ <div class="row"><button type="button" id="mapCombineModeButton" onclick="toggleMapCombineMode()">Combine Pins</button><button type="button" class="secondary" onclick="cancelMapCombineMode()">Cancel</button></div>
+ <div id="mapCombineStatus" class="small muted" role="status" aria-live="polite">Tap Combine Pins to begin.</div>
+</div>
 
 <div class="small muted" style="margin-top:8px">
 Map pin colors:
@@ -884,50 +890,195 @@ function ensureTowerMap(){
  renderTowerMap();
 }
 
+// Names are labels, not coordinates. Never use names to relocate records.
+// Carrier identity is intentionally NOT part of this key: different carriers
+// share the same location but keep distinct markers and popups.
+function physicalSiteName(r){
+ return String(r?.site||'').trim().toLowerCase().replace(/\s+/g,' ');
+}
+function siteLocationForName(name){
+ const matching=(DB?.records||[]).filter(r=>physicalSiteName(r)===name);
+ // Prefer the most recently placed valid coordinate when multiple legacy
+ // records for this named site disagree. This is display-only; no data loss.
+ for(let i=matching.length-1;i>=0;i--){
+   const r=getEffectiveRecord(matching[i]);
+   if(validCoord(r.latitude,-90,90)&&validCoord(r.longitude,-180,180))
+     return {lat:Number(r.latitude),lon:Number(r.longitude)};
+ }
+ return null;
+}
+// One marker per carrier per physical site; each record retains its own identity.
+// No distance threshold and no visual coordinate offset.
+// Tower grouping uses manual group IDs and carrier identity only.
+// Keep carrier groups separate even when records have no explicit PLMN.
+// A missing PLMN must NEVER cause two different carrier names to merge.
+function mapCarrierIdentity(entry){
+ const r=entry.effective||entry.record||{};
+ const name=String(r.carrier||entry.record?.carrier||'').trim().toLowerCase().replace(/\s+/g,' ');
+ const plmn=String(registryPlmnForRecord(r)||registryPlmnForRecord(entry.record)||'').trim();
+ return {name,plmn};
+}
+function sameMapCarrier(a,b){
+ const x=mapCarrierIdentity(a), y=mapCarrierIdentity(b);
+ // Explicitly different names cannot share a popup, even with missing/misassigned PLMNs.
+ if(x.name && y.name && x.name!==y.name)return false;
+ if(x.plmn && y.plmn && x.plmn!==y.plmn)return false;
+ // If a name is missing, require two matching PLMNs; don't group anonymous records.
+ if(!x.name || !y.name)return !!(x.plmn && y.plmn && x.plmn===y.plmn);
+ return x.name===y.name;
+}
+// Explicit group IDs only. A matching name or proximity never combines pins.
+function samePhysicalSite(a,b){
+ const x=a.record?.mapPinGroup, y=b.record?.mapPinGroup;
+ return !!(x&&y&&x===y&&sameMapCarrier(a,b));
+}
+let mapCombineMode=false;
+let mapCombineFirstKeys=null;
+function mapCombineStatus(message){
+ const el=document.getElementById('mapCombineStatus');if(el)el.textContent=message;
+ const btn=document.getElementById('mapCombineModeButton');if(btn)btn.textContent=mapCombineMode?'Select second pin…':'Combine Pins';
+}
+function toggleMapCombineMode(){mapCombineMode=true;mapCombineFirstKeys=null;mapCombineStatus('Tap the first pin on the map.');}
+function cancelMapCombineMode(){mapCombineMode=false;mapCombineFirstKeys=null;mapCombineStatus('Tap Combine Pins to begin.');}
+function mapRecordsForKeys(keys){const set=new Set(keys);return DB.records.filter(r=>set.has(keyOf(r)));}
+function mapPinTapped(site){
+ if(!mapCombineMode)return false;
+ const keys=site.map(e=>keyOf(e.record));
+ if(!mapCombineFirstKeys){mapCombineFirstKeys=keys;mapCombineStatus('First pin selected. Tap a second pin from the same carrier.');return true;}
+ if(keys.some(k=>mapCombineFirstKeys.includes(k))){mapCombineStatus('That is the same pin. Tap another pin.');return true;}
+ const first=mapRecordsForKeys(mapCombineFirstKeys),second=mapRecordsForKeys(keys);
+ if(!first.length||!second.length){cancelMapCombineMode();return true;}
+ const selected=[...new Map([...first,...second].map(r=>[keyOf(r),r])).values()];
+ const groupIds=new Set(selected.map(r=>r.mapPinGroup).filter(Boolean));
+ const members=DB.records.filter(r=>selected.includes(r)||(r.mapPinGroup&&groupIds.has(r.mapPinGroup)));
+ const entries=members.map(record=>({record,effective:record}));
+ if(!entries.every(e=>sameMapCarrier(entries[0],e))){mapCombineStatus('Cannot combine different carriers. Tap another pin from the same carrier.');return true;}
+ const groupId=selected.find(r=>r.mapPinGroup)?.mapPinGroup||'manual-'+Date.now().toString(36);
+ const previous=members.map(r=>({r,old:r.mapPinGroup}));
+ try{members.forEach(r=>r.mapPinGroup=groupId);saveLocal('Combine pins from map');}
+ catch(err){previous.forEach(({r,old})=>{if(old)r.mapPinGroup=old;else delete r.mapPinGroup;});mapCombineStatus('Could not save: '+String(err?.message||err));return true;}
+ mapCombineMode=false;mapCombineFirstKeys=null;
+ renderTowerMap();scheduleCloudSync(200);
+ mapCombineStatus('Pins combined. Coordinates unchanged. Wait for Synced ✓.');
+ return true;
+}
+function separateMapPin(keys){
+ const records=mapRecordsForKeys(keys);
+ const ids=new Set(records.map(r=>r.mapPinGroup).filter(Boolean));
+ if(!ids.size){mapCombineStatus('This pin is not a manual group.');return;}
+ const members=DB.records.filter(r=>ids.has(r.mapPinGroup));
+ const previous=members.map(r=>({r,id:r.mapPinGroup}));
+ try{members.forEach(r=>delete r.mapPinGroup);saveLocal('Separate pin from map');}
+ catch(err){previous.forEach(({r,id})=>r.mapPinGroup=id);mapCombineStatus('Could not separate: '+String(err?.message||err));return;}
+ renderTowerMap();scheduleCloudSync(200);
+ mapCombineStatus('Pins separated. Coordinates unchanged. Wait for Synced ✓.');
+}
 function renderTowerMap(){
  if(!towerMap||!DB)return;
  towerMarkers.forEach(m=>m.remove());
  towerMarkers=[];
  activeMapEditMarker=null;
-
+ const sites=[];
+ let located=0;
  for(const r of DB.records){
    const er=getEffectiveRecord(r);
    if(!validCoord(er.latitude,-90,90)||!validCoord(er.longitude,-180,180))continue;
-   const lat=Number(er.latitude),lon=Number(er.longitude);
-
-   const editing=activeMapEditRecord && keyOf(activeMapEditRecord)===keyOf(r);
-   const marker=L.marker([lat,lon],{draggable:!!editing,icon:carrierMapIcon(r)}).addTo(towerMap);
-   const towerName=esc(er.site||r.site||'Unnamed tower');
-   const towerCarrier=esc(er.carrier||r.carrier||'Unknown carrier');
-   const towerRadio=esc(er.radio||r.radio||'Unknown');
-   const towerId=er.eNB||r.eNB||er.gNB||r.gNB||'';
-   const towerIdLabel=(er.eNB||r.eNB)?'LTE eNB':'5G gNB';
-   const towerBands=esc(er.bands||r.bands||'Not recorded');
-   marker.bindPopup(
-     `<div style="min-width:190px;line-height:1.6;color:#172033">`+
-     `<div style="font-weight:800;font-size:16px;margin-bottom:5px">${towerName}</div>`+
-     `<div><b>Carrier:</b> ${towerCarrier}</div>`+
-     `<div><b>Network:</b> ${towerRadio}</div>`+
-     `<div><b>${towerIdLabel}:</b> ${esc(towerId||'Not recorded')}</div>`+
-     `<div><b>Bands:</b> ${towerBands}</div>`+
-     `${editing?'<div><b>Drag this pin to move tower</b></div>':''}</div>`,
-     {maxWidth:310,autoPan:true,closeButton:true}
-   );
-   marker.on('click',()=>marker.openPopup());
-
-   if(editing){
-     activeMapEditMarker=marker;
-     marker.on('dragend',ev=>{
-       const ll=ev.target.getLatLng();
-       saveMapEditedLocation(r,ll.lat,ll.lng,false);
-     });
+   located++;
+   // Always use each record's actual saved coordinates. Never borrow another
+   // record's position merely because its tower name matches.
+   const entry={record:r,effective:er,latitude:Number(er.latitude),longitude:Number(er.longitude)};
+   let site=sites.find(group=>group.every(member=>samePhysicalSite(member,entry)));
+   if(!site){site=[];sites.push(site);}
+   site.push(entry);
+ }
+ for(const site of sites){
+   const selected=site.find(e=>activeMapEditRecord&&keyOf(activeMapEditRecord)===keyOf(e.record));
+   const anchor=selected||site[0];
+   const icon=carrierMapIcon(anchor.record);
+   // Render at the exact saved location: no forced separation or minimum spacing.
+   const position=[anchor.latitude,anchor.longitude];
+   const marker=L.marker(position,{draggable:true,autoPan:true,icon}).addTo(towerMap);
+   const heading=site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
+   const entries=site.map((entry,i)=>{
+     const r=entry.record,er=entry.effective;
+     const towerId=er.eNB||r.eNB||er.gNB||r.gNB||'Not recorded';
+     const idLabel=(er.eNB||r.eNB)?'LTE eNB':'5G gNB';
+     return '<div style="padding:6px 0;'+(i?'border-top:1px solid #d6dbe2;':'')+'">'+
+       '<b>'+esc(er.site||r.site||'Unnamed tower')+'</b><div><b>Carrier:</b> '+esc(er.carrier||r.carrier||'Unknown')+'</div>'+
+       '<div><b>Network:</b> '+esc(er.radio||r.radio||'Unknown')+'</div>'+
+       '<div><b>'+idLabel+':</b> '+esc(towerId)+'</div>'+
+       '<div><b>Bands:</b> '+esc(er.bands||r.bands||'Not recorded')+'</div></div>';
+   }).join('');
+   marker.bindPopup('<div style="min-width:215px;max-height:300px;overflow-y:auto;line-height:1.5;color:#172033">'+
+     '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+entries+
+     (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:true,closeButton:true});
+   marker.on('click',()=>{
+     if(mapPinTapped(site)){marker.closePopup();return;}
      marker.openPopup();
+   });
+   if(site.some(e=>e.record.mapPinGroup)){
+     marker.on('popupopen',ev=>{
+       const content=ev.popup.getElement()?.querySelector('.leaflet-popup-content');
+       if(!content||content.querySelector('[data-separate-map-pin]'))return;
+       const btn=document.createElement('button');
+       btn.type='button';btn.dataset.separateMapPin='1';btn.textContent='Separate Pin';
+       btn.style.cssText='width:100%;padding:8px;margin-top:8px';
+       btn.addEventListener('click',()=>separateMapPin(site.map(e=>keyOf(e.record))));
+       content.appendChild(btn);
+     });
    }
+   // Every saved pin can be held and dragged. Persist immediately on release.
+   // Move only the records represented by this one carrier pin; never another carrier.
+   marker.on('dragstart',()=>{ marker.closePopup(); });
+   marker.on('dragend',ev=>{
+     const ll=ev.target.getLatLng();
+     persistDraggedCarrierPin(site,ll.lat,ll.lng,marker);
+   });
+   if(selected){activeMapEditMarker=marker;marker.openPopup();}
    towerMarkers.push(marker);
  }
-
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${towerMarkers.length} saved tower location${towerMarkers.length===1?'':'s'} shown. ${DB.records.length-towerMarkers.length} records lack valid coordinates.`;
+ if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move it. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
+}
+
+// Save a dragged marker as one atomic edit for the records represented by
+// that marker (same carrier and matching site name only).
+function persistDraggedCarrierPin(site,lat,lon,marker){
+ if(!DB||!site?.length||!validCoord(lat,-90,90)||!validCoord(lon,-180,180)){
+   renderTowerMap();return;
+ }
+ const originals=[];
+ for(const entry of site){
+   const identity=keyOf(entry.record);
+   const idx=DB.records.findIndex(r=>keyOf(r)===identity);
+   if(idx<0){renderTowerMap();alert('Tower record not found. Location not saved.');return;}
+   originals.push({idx,record:cloneRecord(DB.records[idx])});
+ }
+ for(const {idx} of originals){
+   DB.records[idx]={...DB.records[idx],latitude:Number(lat).toFixed(6),longitude:Number(lon).toFixed(6)};
+ }
+ try{saveLocal('Dragged map pin for '+(site[0].record.site||'tower'));}
+ catch(e){
+   for(const {idx,record} of originals)DB.records[idx]=record;
+   renderTowerMap();alert('Unable to save moved pin: '+String(e?.message||e));return;
+ }
+ for(const {record} of originals){
+   const staged=pendingTowerChanges[keyOf(record)];
+   if(staged){
+     delete staged.changes.latitude;delete staged.changes.longitude;
+     if(!Object.keys(staged.changes).length)delete pendingTowerChanges[keyOf(record)];
+   }
+ }
+ pendingTowerLocationChange=null;
+ const actions=document.getElementById('pendingLocationActions');
+ if(actions)actions.classList.add('hidden');
+ refreshPendingChangesUI();
+ renderTowerMap();
+ towerMap.setView([lat,lon],towerMap.getZoom());
+ toast('Pin saved. Syncing to cloud…');
+ const status=document.getElementById('mapEditStatus');
+ if(status)status.textContent='Pin moved and saved locally. Wait for Synced ✓ before closing the app.';
+ scheduleCloudSync(200);
 }
 
 
@@ -978,22 +1129,27 @@ function savePendingTowerLocation(){
  const identity=keyOf(p.record);
  const idx=(DB.records||[]).findIndex(r=>keyOf(r)===identity);
  if(idx<0){alert('The selected tower is no longer in the registry. No changes saved.');return;}
- const before=cloneRecord(DB.records[idx]);
+ // Persist only the explicitly selected tower. Never silently rewrite
+ // coordinates of other records or carriers, even with matching site names.
+ const affected=[[idx,cloneRecord(DB.records[idx])]];
+ const siteName=physicalSiteName(DB.records[idx]);
  DB.records[idx]={...DB.records[idx],latitude:lat.toFixed(6),longitude:lon.toFixed(6)};
  try{
-   saveLocal('Saved map location for '+identity);
+   saveLocal('Saved location for '+(DB.records[idx].site||'selected tower'));
  }catch(e){
-   DB.records[idx]=before;
+   affected.forEach(([i,before])=>{DB.records[i]=before;});
    alert('Could not save location on this device: '+String(e?.message||e));
    return;
  }
- // Remove only this tower's staged location values; preserve other edits.
- const staged=pendingTowerChanges[identity];
- if(staged){
-   delete staged.changes.latitude;
-   delete staged.changes.longitude;
-   if(!Object.keys(staged.changes).length)delete pendingTowerChanges[identity];
- }
+ // Clear staged coordinates for all colocated records, preserving other edits.
+ affected.forEach(([i,before])=>{
+   const staged=pendingTowerChanges[keyOf(before)];
+   if(staged){
+     delete staged.changes.latitude;
+     delete staged.changes.longitude;
+     if(!Object.keys(staged.changes).length)delete pendingTowerChanges[keyOf(before)];
+   }
+ });
  refreshPendingChangesUI();
  pendingTowerLocationChange=null;
  const actions=document.getElementById('pendingLocationActions');
@@ -1001,7 +1157,7 @@ function savePendingTowerLocation(){
  activeMapEditRecord=DB.records[idx];
  if(towerMap){renderTowerMap();towerMap.setView([lat,lon],16);}
  const status=document.getElementById('mapEditStatus')||document.getElementById('mapUpdateStatus');
- if(status)status.textContent='Location saved on this device. Cloud upload pending until Synced ✓ appears.';
+ if(status)status.textContent='Selected tower location saved. Cloud upload pending until Synced ✓ appears.';
  toast('Tower location saved locally. Syncing to cloud…');
  scheduleCloudSync(200);
 }
@@ -1374,15 +1530,32 @@ function signalRating(kind,v){
 }
 
 function carrierMapColor(name,plmn){
- const n=String(name||'').toLowerCase();
+ // Recognized carriers use their established brand palette rather than a
+ // generated color. Unknown carriers remain neutral until explicitly mapped.
+ const n=String(name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
  const p=String(plmn||'').replace(/\D/g,'');
- if(p==='310830'||n.includes('starlink'))return '#111111';
- if(p==='310260'||n.includes('t-mobile')||n.includes('tmobile'))return '#E20074';
- if(p==='310410'||n.includes('at&t')||n.includes('att'))return '#009FDB';
- if(p==='311480'||n.includes('verizon'))return '#CD040B';
- if(p==='312290'||n.includes('strata'))return '#F58220';
- if(p==='310020'||p==='31220'||n.includes('union wireless'))return '#006341';
- return '#6B7280';
+ const has=(term)=>(' '+n+' ').includes(' '+term+' ');
+ if(p==='310830'||has('starlink')||has('t mobile starlink'))return '#111111';
+ if(p==='310260'||has('t mobile')||has('tmobile'))return '#E20074';
+ if(p==='310410'||has('at t')||has('att'))return '#009FDB';
+ if(p==='311480'||has('verizon'))return '#CD040B';
+ if(p==='312290'||has('strata')||has('strata networks'))return '#F58220';
+ if(p==='310020'||p==='31220'||has('union wireless'))return '#006341';
+ // Other recognized operators. PLMNs listed only when carrier identification
+ // is sufficiently specific; names handle additional markets and MVNOs.
+ if(has('uscellular')||has('us cellular'))return '#0066B3';
+ if(has('boost mobile')||has('boost'))return '#F15A24';
+ if(has('dish wireless')||has('dish'))return '#F15A24';
+ if(has('cricket wireless')||has('cricket'))return '#5CBF3A';
+ if(has('metro by t mobile')||has('metropcs')||has('metro'))return '#6B2C91';
+ if(has('rogers')||has('rogers wireless'))return '#DA291C';
+ if(has('bell mobility')||has('bell canada'))return '#00549A';
+ if(has('telus'))return '#4B286D';
+ if(has('vodafone'))return '#E60000';
+ if(has('orange'))return '#FF7900';
+ if(has('ee'))return '#00B2A9';
+ if(has('o2'))return '#0050FF';
+ return '#6B7280'; // Unknown carrier: neutral until its brand is identified.
 }
 
 function carrierMapIcon(record){
@@ -2140,6 +2313,7 @@ const CLOUD_SYNC_DEVICE_KEY='towerRegistryCloudDeviceId_v34';
 const CLOUD_SYNC_PIN_KEY='towerRegistryCloudPin_v34';
 let cloudSyncBusy=false;
 let cloudSyncTimer=null;
+let cloudInitialDownloadComplete=false;
 
 function cloudDeviceId(){
  let id=localStorage.getItem(CLOUD_SYNC_DEVICE_KEY);
@@ -2218,7 +2392,7 @@ function stampRegistryForSync(){
    // Critical offline fix: every new/changed record gets a fresh modification
    // timestamp, even if it had already synced in the past.
    if(changed){
-     r._syncModifiedAt=now;
+     r._syncModifiedAt=Math.max(now,Number(r._syncModifiedAt||0)+1,Number(old?._syncModifiedAt||0)+1);
    }else if(old && Number(old._syncModifiedAt||0)){
      r._syncModifiedAt=Number(old._syncModifiedAt);
    }
@@ -2249,12 +2423,36 @@ async function cloudSyncNow(force=false){
  }
  cloudSyncBusy=true;
  try{
+   setCloudSyncStatus('☁ Syncing…');
+   // A Home Screen installation has separate storage from Safari. Always read
+   // the existing cloud registry BEFORE the first upload in this app session.
+   // Never send an empty/partial fresh install to the server before this read.
+   if(!cloudInitialDownloadComplete){
+     setCloudSyncStatus('☁ Downloading existing towers…');
+     const initial=await fetch(base+'/.netlify/functions/registry-sync',{
+       method:'GET',headers:{'x-tower-pin':cloudSyncPin()},cache:'no-store'
+     });
+     const initialRaw=await initial.text();
+     let cloud={};
+     try{cloud=JSON.parse(initialRaw||'{}')}catch(e){}
+     if(!initial.ok||!cloud.ok||!cloud.registry||!Array.isArray(cloud.registry.records)){
+       throw new Error('Initial cloud download failed (HTTP '+initial.status+'). Upload blocked to protect existing towers.');
+     }
+     DB=mergeCloudRegistry(DB,cloud.registry);
+     localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+     saveOfflineRegistryCopy(DB,Number(cloud.revision||0));
+     const prev=getCloudState();
+     setCloudState({...prev,remoteRevision:Number(cloud.revision||0),baseline:cloneJson(DB)});
+     cloudInitialDownloadComplete=true;
+     try{renderRegistry();renderTowerMap();showOfflineRegistryStatus()}catch(e){}
+   }
    stampRegistryForSync();
    const state=getCloudState();
    setCloudSyncStatus('☁ Syncing…');
 
    // text/plain keeps this a "simple" cross-origin request, avoiding a CORS
    // preflight between GitHub Pages and the Netlify sync backend.
+   const submittedRecords=cloneJson(DB.records||[]);
    const resp=await fetch(base+'/.netlify/functions/registry-sync',{
      method:'POST',
      headers:{'content-type':'text/plain;charset=UTF-8'},
@@ -2282,16 +2480,50 @@ async function cloudSyncNow(force=false){
        saveOfflineRegistryCopy(DB,Number(data.revision||0));
      showOfflineRegistryStatus();
    }
+   // Verify the server actually retained every locally edited record before
+   // clearing the pending queue or claiming synchronization succeeded.
+   const verification=await fetch(base+'/.netlify/functions/registry-sync',{
+     method:'GET',headers:{'x-tower-pin':cloudSyncPin()},cache:'no-store'
+   });
+   let confirmed={};
+   try{confirmed=JSON.parse(await verification.text())}catch(e){}
+   if(!verification.ok||!confirmed.ok||!Array.isArray(confirmed.registry?.records)){
+     throw new Error('Cloud read-back failed; local edits kept pending.');
+   }
+   const remoteMap=new Map(confirmed.registry.records.map(r=>[recordSyncKey(r),r]));
+   const unconfirmed=submittedRecords.filter(r=>{
+     const rr=remoteMap.get(recordSyncKey(r));
+     if(!rr)return true;
+     const localTime=Number(r._syncModifiedAt||0);
+     const remoteTime=Number(rr._syncModifiedAt||0);
+     if(localTime>remoteTime)return true;
+     if(localTime===remoteTime){
+       const a={...r},b={...rr};
+       return JSON.stringify(a)!==JSON.stringify(b);
+     }
+     return false;
+   });
+   if(unconfirmed.length){
+     const keep=new Map(submittedRecords.map(r=>[recordSyncKey(r),r]));
+     DB.records=(DB.records||[]).map(r=>keep.get(recordSyncKey(r))||r);
+     localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+     // Keep the local copy and pending state intact. Do not overwrite with
+     // an older server copy and do not display a false green checkmark.
+     throw new Error(unconfirmed.length+' tower update(s) not confirmed in cloud; retry sync.');
+   }
+   DB=mergeCloudRegistry(DB,confirmed.registry);
+   localStorage.setItem('masterTowerRegistry',JSON.stringify(DB));
+   saveOfflineRegistryCopy(DB,Number(confirmed.revision||0));
    setCloudState({
      pending:false,
-     remoteRevision:Number(data.revision||0),
+     remoteRevision:Number(confirmed.revision||0),
      lastSync:Date.now(),
      baseline:cloneJson(DB)
    });
    clearOfflineUploadQueue();
    showOfflineUploadStatus();
    setCloudSyncStatus('☁ Synced ✓',true);
-   try{renderRegistry()}catch(e){}
+   try{renderRegistry();renderTowerMap();showOfflineRegistryStatus()}catch(e){}
  }catch(e){
    const state=getCloudState();
    state.pending=true;

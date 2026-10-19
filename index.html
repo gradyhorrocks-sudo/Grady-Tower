@@ -952,6 +952,12 @@ function sameMapCarrier(a,b){
  if(!x.name || !y.name)return !!(x.plmn && y.plmn && x.plmn===y.plmn);
  return x.name===y.name;
 }
+// A colocation is an explicitly saved shared physical site. Carrier records stay independent.
+// Matching coordinates alone NEVER create a colocation.
+function sameMapColocation(a,b){
+ const x=a.record?.mapColocationGroup,y=b.record?.mapColocationGroup;
+ return !!(x&&y&&x===y&&Math.abs(a.latitude-b.latitude)<0.0000001&&Math.abs(a.longitude-b.longitude)<0.0000001);
+}
 // Explicit group IDs only. A matching name or proximity never combines pins.
 function samePhysicalSite(a,b){
  const x=a.record?.mapPinGroup, y=b.record?.mapPinGroup;
@@ -1233,24 +1239,27 @@ function renderTowerMap(){
    // Always use each record's actual saved coordinates. Never borrow another
    // record's position merely because its tower name matches.
    const entry={record:r,effective:er,latitude:Number(er.latitude),longitude:Number(er.longitude)};
-   let site=sites.find(group=>group.every(member=>samePhysicalSite(member,entry)));
+   let site=sites.find(group=>group.every(member=>samePhysicalSite(member,entry)||sameMapColocation(member,entry)));
    if(!site){site=[];sites.push(site);}
    site.push(entry);
  }
  for(const site of sites){
    const selected=site.find(e=>activeMapEditRecord&&keyOf(activeMapEditRecord)===keyOf(e.record));
    const anchor=selected||site[0];
-   const icon=carrierMapIcon(anchor.record);
+   const colocated=site.length>1&&site.some(e=>!sameMapCarrier(site[0],e));
+   const icon=colocated?colocatedTowerIcon(site):carrierMapIcon(anchor.record);
    // Render at the exact saved location: no forced separation or minimum spacing.
    const position=[anchor.latitude,anchor.longitude];
-   const marker=L.marker(position,{draggable:true,autoPan:true,icon}).addTo(towerMap);
-   const heading=site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
+   // Shared multicarrier tower is not draggable: moving it would silently move unrelated carriers.
+   // Individual towers remain draggable, including manually combined same-carrier sites.
+   const marker=L.marker(position,{draggable:!colocated,autoPan:true,icon}).addTo(towerMap);
+   const heading=colocated?'Colocated site · '+new Set(site.map(e=>registryPlmnForRecord(e.record)||String((e.effective||e.record).carrier||'Unknown').trim().toLowerCase())).size+' carriers ('+site.length+' eNB/gNB records)':site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
    const entries=site.map((entry,i)=>{
      const r=entry.record,er=entry.effective;
      const towerId=er.eNB||r.eNB||er.gNB||r.gNB||'Not recorded';
      const idLabel=(er.eNB||r.eNB)?'LTE eNB':'5G gNB';
      return '<div style="padding:6px 0;'+(i?'border-top:1px solid #d6dbe2;':'')+'">'+
-       '<b>'+esc(er.site||r.site||'Unnamed tower')+'</b><div><b>Carrier:</b> '+esc(er.carrier||r.carrier||'Unknown')+'</div>'+
+       '<b>'+esc(er.site||r.site||'Unnamed tower')+'</b><div><b>Carrier:</b> <span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:'+carrierMapColor(er.carrier||r.carrier,registryPlmnForRecord(r))+';margin-right:5px"></span>'+esc(er.carrier||r.carrier||'Unknown')+' (PLMN '+esc(registryPlmnForRecord(r)||'Unknown')+')</div>'+
        '<div><b>Network:</b> '+esc(er.radio||r.radio||'Unknown')+'</div>'+(r.mapColocationGroup?'<div><b>Colocated tower</b></div>':'')+
        '<div><b>'+idLabel+':</b> '+esc(towerId)+'</div>'+
        '<div><b>Bands:</b> '+esc(er.bands||r.bands||'Not recorded')+'</div></div>';
@@ -1286,7 +1295,7 @@ function renderTowerMap(){
  }
  updateTowerSearchHighlights();
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map pin${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move it. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
+ if(status)status.textContent=`${sites.length} map tower icon${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Hold and drag a pin to move it. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
 }
 
 // Save a dragged marker as one atomic edit for the records represented by
@@ -1808,6 +1817,30 @@ function carrierMapColor(name,plmn){
  return '#6B7280'; // Unknown carrier: neutral until its brand is identified.
 }
 
+function colocatedTowerIcon(site){
+ // One icon per physical site. Every distinct carrier gets its own color segment.
+ const colors=[];
+ const carrierNames=[];
+ for(const entry of site){
+  const r=entry.effective||entry.record;
+  const plmn=registryPlmnForRecord(entry.record);
+  const key=(plmn||String(r.carrier||'Unknown').trim().toLowerCase());
+  if(carrierNames.includes(key))continue;
+  carrierNames.push(key);
+  colors.push(carrierMapColor(r.carrier,plmn));
+ }
+ const n=colors.length;
+ // The segmented ring shows each distinct carrier once. The number counts carriers, not eNBs.
+ const sectors=colors.map((color,i)=>{
+  const a=2*Math.PI*i/n-Math.PI/2,b=2*Math.PI*(i+1)/n-Math.PI/2;
+  const x1=27+23*Math.cos(a),y1=27+23*Math.sin(a),x2=27+23*Math.cos(b),y2=27+23*Math.sin(b);
+  return '<path d="M27 27 L'+x1.toFixed(2)+' '+y1.toFixed(2)+' A23 23 0 '+(b-a>Math.PI?'1':'0')+' 1 '+x2.toFixed(2)+' '+y2.toFixed(2)+' Z" fill="'+color+'"/>';
+ }).join('');
+ const badge='<circle cx="27" cy="27" r="15" fill="#132033" stroke="white" stroke-width="2"/><text x="27" y="32" fill="white" font-size="15" font-weight="800" text-anchor="middle">'+site.length+'</text>';
+ const tower='<g stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M27 52 L17 78 M27 52 L37 78 M19 70 H35 M22 61 H32"/></g><g stroke="#293447" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M27 52 L17 78 M27 52 L37 78 M19 70 H35 M22 61 H32"/></g>';
+ const html='<svg width="54" height="82" viewBox="0 0 54 82" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Colocated tower, '+n+' carriers, '+site.length+' tower records"><circle cx="27" cy="27" r="25" fill="white"/>'+sectors+badge+tower+'</svg>';
+ return L.divIcon({className:'',html,iconSize:[54,82],iconAnchor:[27,78],popupAnchor:[0,-70]});
+}
 function carrierMapIcon(record){
  const plmn=(typeof registryPlmnForRecord==='function') ? registryPlmnForRecord(record) : (record.plmn||'');
  const color=carrierMapColor(record.carrier,plmn);

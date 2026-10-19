@@ -1836,7 +1836,7 @@ function colocatedTowerIcon(site){
   const x1=27+23*Math.cos(a),y1=27+23*Math.sin(a),x2=27+23*Math.cos(b),y2=27+23*Math.sin(b);
   return '<path d="M27 27 L'+x1.toFixed(2)+' '+y1.toFixed(2)+' A23 23 0 '+(b-a>Math.PI?'1':'0')+' 1 '+x2.toFixed(2)+' '+y2.toFixed(2)+' Z" fill="'+color+'"/>';
  }).join('');
- const badge='<circle cx="27" cy="27" r="15" fill="#132033" stroke="white" stroke-width="2"/><text x="27" y="32" fill="white" font-size="15" font-weight="800" text-anchor="middle">'+site.length+'</text>';
+ const badge='<circle cx="27" cy="27" r="15" fill="#132033" stroke="white" stroke-width="2"/><text x="27" y="32" fill="white" font-size="15" font-weight="800" text-anchor="middle">'+n+'</text>';
  const tower='<g stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M27 52 L17 78 M27 52 L37 78 M19 70 H35 M22 61 H32"/></g><g stroke="#293447" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M27 52 L17 78 M27 52 L37 78 M19 70 H35 M22 61 H32"/></g>';
  const html='<svg width="54" height="82" viewBox="0 0 54 82" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Colocated tower, '+n+' carriers, '+site.length+' tower records"><circle cx="27" cy="27" r="25" fill="white"/>'+sectors+badge+tower+'</svg>';
  return L.divIcon({className:'',html,iconSize:[54,82],iconAnchor:[27,78],popupAnchor:[0,-70]});

@@ -1090,7 +1090,8 @@ function renderUnmappedTowerList(){
  const list=document.getElementById('unmappedTowerList'),count=document.getElementById('unmappedTowerCount');
  if(!list||!DB)return;
  const query=String(document.getElementById('unmappedTowerFilter')?.value||'').trim().toLowerCase();
- const missing=DB.records.filter(r=>{const e=getEffectiveRecord(r);return !validCoord(e.latitude,-90,90)||!validCoord(e.longitude,-180,180);});
+ // Use committed coordinates, not unsaved staging overlays, to decide whether a tower is mapped.
+ const missing=DB.records.filter(r=>!validCoord(r.latitude,-90,90)||!validCoord(r.longitude,-180,180));
  const filtered=missing.filter(r=>[r.site,r.carrier,r.radio,r.eNB,r.gNB].some(x=>String(x||'').toLowerCase().includes(query)));
  count.textContent=missing.length+' towers without locations · '+filtered.length+' shown';
  list.replaceChildren();
@@ -1269,7 +1270,7 @@ function savePendingTowerLocation(){
  // coordinates of other records or carriers, even with matching site names.
  const affected=[[idx,cloneRecord(DB.records[idx])]];
  const siteName=physicalSiteName(DB.records[idx]);
- DB.records[idx]={...DB.records[idx],latitude:lat.toFixed(6),longitude:lon.toFixed(6)};
+ DB.records[idx]={...DB.records[idx],latitude:lat.toFixed(6),longitude:lon.toFixed(6),_syncModifiedAt:Math.max(Date.now(),Number(DB.records[idx]._syncModifiedAt||0)+1)};
  try{
    saveLocal('Saved location for '+(DB.records[idx].site||'selected tower'));
  }catch(e){
@@ -1292,6 +1293,8 @@ function savePendingTowerLocation(){
  if(actions)actions.classList.add('hidden');
  activeMapEditRecord=DB.records[idx];
  if(towerMap){renderTowerMap();towerMap.setView([lat,lon],16);}
+ // Refresh the unmapped list even when the map has not initialized.
+ renderUnmappedTowerList();
  const status=document.getElementById('mapEditStatus')||document.getElementById('mapUpdateStatus');
  if(status)status.textContent='Selected tower location saved. Cloud upload pending until Synced ✓ appears.';
  toast('Tower location saved locally. Syncing to cloud…');

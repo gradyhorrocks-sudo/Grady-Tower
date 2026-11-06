@@ -1,6 +1,6 @@
-const CACHE='mctr-offline-map-v117';
+const CACHE='mctr-offline-map-v139-single-id-delete';
 const TILE_CACHE='mctr-viewed-map-tiles-v99';
-const TILE_LIMIT=450;
+const TILE_LIMIT=650;
 const MAP_LIBS=new Set(['https://unpkg.com/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css']);
 
 const CORE=[
@@ -90,24 +90,34 @@ self.addEventListener('fetch',event=>{
  // Save map tiles as the user views them online. No bulk tile downloads.
  // The separate bounded cache limits storage consumption on iOS.
  const isStreetTile=/^(?:[abc]\.)?tile\.openstreetmap\.org$/.test(url.hostname) && /^\/\d+\/\d+\/\d+\.png$/.test(url.pathname);
- const isSatelliteTile=url.hostname==='server.arcgisonline.com' && url.pathname.includes('/World_Imagery/MapServer/tile/');
+ const isSatelliteTile=url.hostname==='server.arcgisonline.com' && (/\/(World_Imagery|World_Transportation|World_Boundaries_and_Places|World_Topo_Map)\/MapServer\/tile\//.test(url.pathname));
  if(isStreetTile||isSatelliteTile){
    event.respondWith((async()=>{
      const cache=await caches.open(TILE_CACHE);
      const old=await cache.match(req);
-     if(old)return old;
+     if(!self.navigator?.onLine && old)return old;
      try{
-       const response=await fetch(req);
+       // Render the fresh tile immediately. Cache writes and eviction happen in
+       // the background rather than blocking tile painting on the iPad.
+       const controller=new AbortController();
+       const timer=setTimeout(()=>controller.abort(),10000);
+       let response;
+       try{response=await fetch(req,{signal:controller.signal,cache:'default'});}finally{clearTimeout(timer);}
        if(response.ok||response.type==='opaque'){
-         await cache.put(req,response.clone());
-         const keys=await cache.keys();
-         if(keys.length>TILE_LIMIT){
-           for(const key of keys.slice(0,keys.length-TILE_LIMIT))await cache.delete(key);
-         }
+         const saving=(async()=>{
+           try{
+             await cache.put(req,response.clone());
+             const keys=await cache.keys();
+             if(keys.length>TILE_LIMIT){
+               for(const key of keys.slice(0,keys.length-TILE_LIMIT))await cache.delete(key);
+             }
+           }catch(e){}
+         })();
+         event.waitUntil(saving);
        }
        return response;
      }catch(e){
-       return (await cache.match(req)) || new Response('<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#dce3e9"/><text x="128" y="128" text-anchor="middle" font-size="14" fill="#64748b">Not cached offline</text></svg>',{headers:{'Content-Type':'image/svg+xml'}});
+       return old || new Response('<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#dce3e9"/><text x="128" y="128" text-anchor="middle" font-size="14" fill="#64748b">Not cached offline</text></svg>',{headers:{'Content-Type':'image/svg+xml'}});
      }
    })());
    return;

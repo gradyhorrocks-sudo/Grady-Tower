@@ -249,7 +249,18 @@ main, .container, .content{
 .map-fullscreen-toolbar button{width:auto;min-width:130px;flex:0 0 auto}
 .map-fullscreen-panel.is-fullscreen{position:fixed!important;inset:0!important;inset:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0!important;z-index:99999!important;background:#0e1424!important;padding:10px 12px!important;box-sizing:border-box!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
 .map-fullscreen-panel.is-fullscreen .map-fullscreen-toolbar{flex:0 0 auto;margin:0 0 6px}
-.map-fullscreen-panel.is-fullscreen > .card{flex:0 0 auto;margin:0 0 6px!important;padding:8px 10px!important;max-height:39vh;overflow:auto}
+.map-fullscreen-panel.is-fullscreen > .card{display:none!important;flex:0 0 auto;margin:0 0 6px!important;padding:8px 10px!important;max-height:39vh;overflow:auto}
+.map-fullscreen-panel.is-fullscreen.search-open > .card{display:block!important}
+.map-fullscreen-actions{display:flex;gap:8px;align-items:center}
+.map-fullscreen-panel.is-fullscreen .map-fullscreen-toolbar{position:absolute;z-index:1002;top:calc(env(safe-area-inset-top) + 8px);right:12px;left:12px;pointer-events:none;justify-content:flex-end}
+.map-fullscreen-panel.is-fullscreen .map-fullscreen-toolbar>*{pointer-events:auto}
+.map-fullscreen-panel.is-fullscreen #mapToolbarTitle{display:none}
+.map-fullscreen-panel.is-fullscreen #mapFullscreenToggle{background:#152238!important;border:2px solid white!important;color:white!important;font-weight:800!important;min-width:150px!important;box-shadow:0 3px 12px #0009}
+.map-fullscreen-panel.is-fullscreen #mapSearchToggle{display:inline-block!important;min-width:90px!important}
+.map-fullscreen-panel.is-fullscreen.search-open > .card{position:absolute;z-index:1001;top:calc(env(safe-area-inset-top) + 57px);right:12px;left:12px;box-shadow:0 8px 30px #000a}
+.map-fullscreen-panel.is-fullscreen{padding:0!important;inset:0!important}
+.map-fullscreen-panel.is-fullscreen #towerMap{border:0!important;border-radius:0!important}
+.map-fullscreen-panel.is-fullscreen .leaflet-control-container .leaflet-top{top:62px}
 .map-fullscreen-panel.is-fullscreen > .card p.small{display:none}
 .map-fullscreen-panel.is-fullscreen textarea#mapTowerSearch{height:46px!important;min-height:46px!important;resize:none}
 .map-fullscreen-panel.is-fullscreen #mapTowerSearchResults{max-height:16vh!important;overflow:auto}
@@ -284,6 +295,8 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 </script>
 
 <style id="map-combine-check-style">
+.tower-enb-label{background:rgba(14,20,36,.91)!important;border:1px solid rgba(255,255,255,.65)!important;border-radius:5px!important;color:#fff!important;font-size:11px!important;font-weight:750!important;letter-spacing:.1px!important;padding:2px 5px!important;box-shadow:0 1px 4px #0007!important;white-space:nowrap!important;pointer-events:none!important}
+.tower-enb-label:before{display:none!important}
 .leaflet-marker-icon.map-combine-selected{filter:drop-shadow(0 0 5px #22c55e);}
 .leaflet-marker-icon .map-combine-check{position:absolute;right:-9px;top:-11px;display:flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;background:#15803d;color:#fff;font-size:19px;font-weight:900;line-height:1;border:2px solid white;box-shadow:0 1px 6px #0008;z-index:9999;pointer-events:none;}
 </style>
@@ -338,7 +351,7 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <section id="tab-lookup">
 <div class="card">
 <h3>Search Towers</h3>
-<p class="muted small">Search anything you know about a tower. Tap Add/Edit Info on any result to open that exact tower and add missing data. Matches can come from tower name, carrier, PLMN, LTE/5G, eNB/gNB, Cell ID/NCI, sector/local cell, PCI, TAC, band, bandwidth, status, notes, coordinates, or verification state. Numeric searches also run LTE /256 and 5G /4096 math.</p>
+<p class="muted small">Search anything you know about a tower. Tap Add/Edit Info on any result to open that exact tower and add missing data. Matches can come from tower name, carrier, PLMN, LTE/5G, eNB/gNB, Cell ID/NCI, sector/local cell, PCI, TAC, band, bandwidth, status, notes, coordinates, or verification state. Numeric searches also check LTE /256 and registry-matched 5G splits. Unverified 5G splits are not confirmed tower identities.</p>
 
 <div class="grid">
 <div>
@@ -422,20 +435,22 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
 <div><label>PLMN</label><input id="sPlmn"></div>
 <div><label>Radio</label><select id="sRadio"><option>LTE</option><option>5G</option></select></div>
 <div><label>Cell ID / NCI</label><input id="sCell"></div>
-<div><label>eNB / gNB</label><input id="sId"></div>
-<div><label>Sector / local cell</label><input id="sLocal"></div>
+<div><label>eNB / gNB (whole number; optional :sector)</label><input id="sId" inputmode="text" placeholder="1849020 or 1849020:3"></div>
+<div><label>Sector / local cell (stored separately)</label><input id="sLocal" inputmode="numeric"></div>
 <div><label>Band</label><input id="sBand"></div>
 <div><label>Bandwidth</label><input id="sBw"></div>
 <div><label>PCI</label><input id="sPci"></div>
 <div><label>TAC</label><input id="sTac"></div>
-<div style="grid-column:1/-1;margin-top:4px"><b>Scanned Signal Values</b><div class="small">These belong to the scanned tower result and can be edited before Save All.</div></div>
+<div><label>Verification status</label><select id="sStatus"><option value="confirmed">Confirmed</option><option value="provisional">Provisional ?</option><option value="unknown">Unmapped / Unknown ?</option></select></div>
+<div style="grid-column:1/-1"><label for="sNotes">Tower Notes</label><textarea id="sNotes" rows="3" style="width:100%;box-sizing:border-box" placeholder="Tower location, backhaul, equipment, observations, or other notes"></textarea></div>
+<div style="grid-column:1/-1;margin-top:4px"><b>Scanned Signal Values</b><div class="small">These belong to the scanned tower result. Changes to an existing tower save automatically after you finish editing a field.</div></div>
 <div><label>RSRP</label><input id="sRsrp" inputmode="decimal"></div>
 <div><label>RSRQ</label><input id="sRsrq" inputmode="decimal"></div>
 <div><label>SNR / SINR</label><input id="sSnr" inputmode="decimal"></div>
 </div>
 <div style="margin-top:12px">
-  <button id="scanSaveAllBtn" class="good" type="button" onclick="saveAllScanEdits()" style="width:100%;font-size:1.05rem">Save All</button>
-  <div id="scanSaveAllStatus" class="small" style="margin-top:7px"></div>
+  <button id="scanSaveAllBtn" class="good" type="button" onclick="scanRestoreExplicitlyRequested=true;saveAllScanEdits()" style="width:100%;font-size:1.05rem">Save All</button>
+  <div id="scanSaveAllStatus" class="small" style="margin-top:7px" role="status" aria-live="polite"></div>
 </div>
 <div style="margin-top:12px">
 <label>OCR text</label>
@@ -494,8 +509,8 @@ window.addEventListener('load',()=>{ registerTowerServiceWorker(); });
  <div id="mapPlaceSearchResults"></div>
 </div>
 <div id="mapFullscreenPanel" class="map-fullscreen-panel">
-<div class="map-fullscreen-toolbar"><strong>Map &amp; Tower Search</strong><button id="mapFullscreenToggle" type="button" onclick="toggleTowerMapFullscreen()" aria-pressed="false">⛶ Full Screen</button></div>
-<div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div>
+<div class="map-fullscreen-toolbar"><strong id="mapToolbarTitle">Map &amp; Tower Search</strong><div class="map-fullscreen-actions"><button id="mapSearchToggle" type="button" onclick="toggleFullscreenMapSearch()" hidden aria-expanded="false">⌕ Search</button><button id="mapFullscreenToggle" type="button" onclick="toggleTowerMapFullscreen()" aria-pressed="false">⛶ Full Screen</button></div></div>
+<div class="card" style="margin-top:12px;padding:12px"><b>Find towers on map</b><p class="small muted">Search tower name, carrier, PLMN, eNB, gNB, or Cell ID. Separate multiple searches with semicolons or new lines. Searches saved towers offline; never changes coordinates.</p><textarea id="mapTowerSearch" rows="2" style="width:100%;box-sizing:border-box" placeholder="Mazer Mountain; 312290; 1038; 265728" aria-label="Tower map search"></textarea><div class="row"><button type="button" onclick="searchTowersOnMap()">Find Towers</button><button type="button" class="secondary" onclick="clearTowerMapSearch()">Clear Search</button></div><div class="map-filter-controls" style="margin-top:12px;padding:10px;border:1px solid #b7c4d3;border-radius:10px;display:grid;gap:8px"><b>Filter visible map towers</b><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px"><label>Carrier / PLMN<select id="mapFilterCarrier" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All carriers</option></select></label><label>Network<select id="mapFilterNetwork" onchange="applyTowerMapFilters()" style="width:100%"><option value="">All networks</option><option value="lte">LTE / 4G</option><option value="5g">5G</option></select></label><label>eNB / gNB labels (hide nonmatching numbers only)<input id="mapFilterEnb" type="search" placeholder="e.g. 13132" oninput="applyTowerMapFilters()" style="width:100%" /></label></div><div class="row"><button type="button" class="secondary" onclick="clearTowerMapFilters()">Clear Filters</button><span id="mapFilterStatus" class="small muted" role="status" aria-live="polite"></span></div></div><div id="mapTowerSearchStatus" class="small muted" role="status" aria-live="polite"></div><div id="mapTowerSearchResults" style="max-height:300px;overflow-y:auto"></div></div><div id="towerMap" style="margin-top:12px"></div><div id="mapDragSaveControls" class="row hidden" style="position:relative;z-index:1001;margin-top:10px;padding:10px;border:1px solid #3f9874;border-radius:10px;background:#122b25"><button type="button" class="good" onclick="saveAllMapMoves()">✓ Save All Map Moves</button><button type="button" class="secondary" onclick="cancelAllMapMoves()">Cancel Moves</button><span id="mapDragSaveStatus" class="small">Drag the tower as many times as needed. Nothing is saved until Save All.</span></div>
 </div><!-- mapFullscreenPanel -->
 <div class="card" style="margin-top:12px;padding:12px">
  <h3>Towers without map locations</h3>
@@ -548,22 +563,15 @@ Tower carrier colors:
 </div>
 
 <div class="card hidden" id="mapEditCard" style="margin-top:14px">
-<h3>Place / Drag Tower</h3>
-<p class="muted small">Enter an eNB or gNB, then choose the tower. Tap the map to preview its location, then tap Save Location. Wait for Synced ✓.</p>
-<div class="grid">
-<div>
-<label>eNB / gNB</label>
-<input id="mapEditId" inputmode="numeric">
-</div>
-<div style="align-self:end">
-<button onclick="selectTowerForMapEdit()">Select Tower</button><button class="secondary" style="margin-top:8px" onclick="stopTowerMapEdit()">Stop Editing</button>
-</div>
-</div>
-<button type="button" class="secondary" onclick="hideMapLocationControls()" style="margin-top:8px">Close location controls</button><div id="mapEditStatus" class="small muted" style="margin-top:8px"></div>
+<h3>Selected Tower Location</h3>
+<p class="muted small">Tap the map to preview a location for the selected tower, then Save Location. For an existing map pin, choose Move this tower and drag it repeatedly before Save All Map Moves.</p>
+<input id="mapEditId" type="hidden">
+<div id="mapEditStatus" class="small muted" style="margin-top:8px"></div>
 <div id="pendingLocationActions" class="hidden" style="margin-top:10px">
 <button class="good" onclick="savePendingTowerLocation()">Save Location</button>
 <button class="secondary" onclick="cancelPendingTowerLocation()">Cancel</button>
 </div>
+<button type="button" class="secondary" onclick="hideMapLocationControls()" style="margin-top:8px">Close location controls</button>
 </div>
 
 
@@ -633,8 +641,8 @@ Tower carrier colors:
 </div><p class="muted small">Type an existing eNB/gNB and the app will autofill all saved details. If a scan or lookup finds an unknown ID, the app can open this form with everything it already knows prefilled. Future carriers are also supported.</p>
 <input type="hidden" id="editKey">
 <div class="grid">
-<div><label>Carrier</label><input id="fCarrier" list="carrierList" placeholder="Carrier name" oninput="syncPlmn();autofillTowerById()"></div>
-<div><label>PLMN</label><input id="fPlmn" inputmode="numeric" oninput="this.dataset.auto='0'"></div>
+<div><label>Carrier</label><input id="fCarrier" list="carrierList" placeholder="Carrier name" oninput="syncPlmn()"></div>
+<div><label>PLMN</label><input id="fPlmn" inputmode="numeric" oninput="syncCarrierFromPlmn()"></div>
 <div><label>Radio</label><select id="fRadio" onchange="updateIdLabel();autofillTowerById()"><option>LTE</option><option>5G</option></select></div>
 <div><label id="idLabel">eNB</label><input id="fId" inputmode="numeric" oninput="autofillTowerById()"></div>
 <div><label>Site name</label><input id="fSite" placeholder="Tower/site name"></div>
@@ -702,6 +710,19 @@ function goBackFromAddEdit(){
 }
 function esc(s){return String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',2200)}
+// eNB/gNB is always an integer tower ID. A CellMapper-style colon suffix
+// denotes a separate sector/local-cell value, never a decimal or rounded ID.
+function parseTowerIdentity(value){
+ const raw=String(value??'').trim();
+ const m=raw.match(/^([0-9]+)(?::([0-9]+))?$/);
+ if(!m)return null;
+ return {id:BigInt(m[1]).toString(),local:m[2]===undefined?'':BigInt(m[2]).toString()};
+}
+function towerIdentityLabel(r){
+ const id=parseTowerIdentity(r?.eNB||r?.gNB||'');
+ const local=String(r?.local_cell??'').trim();
+ return id?(id.id+(/^[0-9]+$/.test(local)?':'+BigInt(local).toString():'')):'Unknown';
+}
 function keyOf(r){return `${r.carrier}|${r.radio}|${r.eNB||r.gNB||''}`}
 function saveLocal(reason='tower/registry save'){
  try{stampRegistryForSync()}catch(e){}
@@ -840,17 +861,21 @@ function toggleTowerMapFullscreen(force){
  if(!panel)return;
  const on=typeof force==='boolean'?force:!panel.classList.contains('is-fullscreen');
  panel.classList.toggle('is-fullscreen',on);
+ panel.classList.remove('search-open');
+ const searchBtn=document.getElementById('mapSearchToggle');if(searchBtn){searchBtn.hidden=!on;searchBtn.setAttribute('aria-expanded','false');}
  document.body.classList.toggle('map-fullscreen-active',on);
  const btn=document.getElementById('mapFullscreenToggle');
  if(btn){btn.textContent=on?'✕ Exit Full Screen':'⛶ Full Screen';btn.setAttribute('aria-pressed',String(on));}
  // Leaflet must recalculate its canvas after the panel resizes.
  if(towerMap){requestAnimationFrame(()=>{towerMap.invalidateSize({pan:false});setTimeout(()=>towerMap.invalidateSize({pan:false}),180);});}
 }
+function toggleFullscreenMapSearch(){const panel=document.getElementById('mapFullscreenPanel');if(!panel?.classList.contains('is-fullscreen'))return;const open=panel.classList.toggle('search-open');document.getElementById('mapSearchToggle')?.setAttribute('aria-expanded',String(open));if(open)document.getElementById('mapTowerSearch')?.focus();}
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.getElementById('mapFullscreenPanel')?.classList.contains('is-fullscreen'))toggleTowerMapFullscreen(false);});
 
 let towerMap=null;
 let towerMarkers=[];
 let armedTowerMoveKeys=null;
+let mapMoveDraftKeys=null;
 let activeMapEditRecord=null;
 let activeMapEditMarker=null;
 let pendingScannedTowerForMap=null;
@@ -907,7 +932,7 @@ function parseMapsLocation(raw){
 
 function ensureTowerMap(){
  if(towerMap || !window.L)return;
- towerMap=L.map('towerMap').setView([40.3,-109.5],8);
+ towerMap=L.map('towerMap',{zoomControl:true,preferCanvas:true,fadeAnimation:false,zoomAnimation:true,zoomSnap:0.5,zoomDelta:0.5,wheelPxPerZoomLevel:90,zoomAnimationThreshold:4}).setView([40.3,-109.5],8);
  const mapHint=document.getElementById('offlineMapHint');
  function updateMapOfflineHint(){if(mapHint)mapHint.textContent=navigator.onLine?'Offline map ready to cache: pan and zoom around the areas you need while connected. Previously viewed map tiles remain available offline (subject to device storage).':'Offline map mode: previously viewed tiles are available. Blank or labeled areas were not cached; pins still use your saved coordinates.';}
  window.addEventListener('online',updateMapOfflineHint);
@@ -915,14 +940,23 @@ function ensureTowerMap(){
  updateMapOfflineHint();
 
  streetLayer=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-   maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
+   maxZoom:19, updateWhenIdle:true, keepBuffer:2, attribution:'&copy; OpenStreetMap contributors'
  });
  satelliteLayer=L.tileLayer(
    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-   {maxZoom:19, attribution:'Tiles &copy; Esri'}
+   {maxZoom:18, maxNativeZoom:18, updateWhenIdle:true, keepBuffer:2, attribution:'Tiles &copy; Esri'}
  );
- streetLayer.addTo(towerMap);
- L.control.layers({'Street Map':streetLayer,'Satellite':satelliteLayer},null,{collapsed:false}).addTo(towerMap);
+ const topoLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,maxNativeZoom:18,updateWhenIdle:true,attribution:'Tiles &copy; Esri'});
+ const imageryLabels=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,maxNativeZoom:18,updateWhenIdle:true,attribution:'Labels &copy; Esri'});
+ const roadsReference=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,maxNativeZoom:18,updateWhenIdle:true,attribution:'Roads &copy; Esri'});
+ const satelliteWithRoads=L.layerGroup([satelliteLayer,roadsReference,imageryLabels]);
+ const satelliteWithLabels=L.layerGroup([satelliteLayer,imageryLabels]);
+ // Preserve the user's last chosen basemap between visits, without resetting their viewport.
+ let preferred='Satellite + Roads';try{preferred=localStorage.getItem('mctr-basemap-v121')||localStorage.getItem('mctr-basemap-v120')||preferred;}catch(e){}
+ const baseMaps={'Satellite + Roads':satelliteWithRoads,'Satellite + Labels':satelliteWithLabels,'Satellite':satelliteLayer,'Topographic':topoLayer,'Street Map':streetLayer};
+ (baseMaps[preferred]||satelliteWithRoads).addTo(towerMap);
+ L.control.layers(baseMaps,null,{collapsed:true,position:'bottomright'}).addTo(towerMap);
+ towerMap.on('baselayerchange',ev=>{try{localStorage.setItem('mctr-basemap-v121',ev.name);}catch(e){}});
 
  towerMap.on('click',e=>{
    if(pendingScannedTowerForMap && typeof finishScannedTowerMapPlacement==='function'){
@@ -1170,32 +1204,75 @@ function mapTowerMatches(r,t){
  if(/^\d+$/.test(q)&&enb){try{const n=BigInt(q);if(n>=256n&&String(n/256n)===enb)return true;}catch(_){}}
  return false;
 }
+function mapNetworkClass(r){
+ const e=getEffectiveRecord(r);
+ const radio=String(e.radio||r.radio||e.network||r.network||'').toLowerCase();
+ if(/5g|\bnr\b|new radio/.test(radio)||String(e.gNB||r.gNB||'').trim())return '5g';
+ if(/lte|4g/.test(radio)||String(e.eNB||r.eNB||'').trim())return 'lte';
+ return 'other';
+}
+function mapFilterMatches(r,ignoreEnb=false){
+ const carrier=document.getElementById('mapFilterCarrier')?.value||'';
+ const network=document.getElementById('mapFilterNetwork')?.value||'';
+ const enb=String(document.getElementById('mapFilterEnb')?.value||'').trim().toLowerCase();
+ const e=getEffectiveRecord(r);
+ if(carrier&&mapTowerPlmn(r)!==carrier&&('name:'+String(e.carrier||r.carrier||'').trim().toLowerCase())!==carrier)return false;
+ if(network&&mapNetworkClass(r)!==network)return false;
+ if(!ignoreEnb&&enb&&!String(e.eNB||r.eNB||e.gNB||r.gNB||'').toLowerCase().includes(enb))return false;
+ return true;
+}
+function refreshMapCarrierFilter(){
+ const sel=document.getElementById('mapFilterCarrier');if(!sel||!DB?.records)return;
+ const current=sel.value;
+ const names=new Map();
+ for(const r of DB.records){
+  if(r.__delete||pendingTowerChanges[keyOf(r)]?.changes?.__delete)continue;
+  const e=getEffectiveRecord(r),name=String(e.carrier||r.carrier||'').trim(),plmn=mapTowerPlmn(r);
+  if(!name&&!plmn)continue;
+  const key=plmn||'name:'+name.toLowerCase();
+  if(!names.has(key))names.set(key,(name||'Unknown carrier')+(plmn?' ('+plmn+')':''));
+ }
+ const entries=[...names.entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+ sel.replaceChildren(new Option('All carriers',''));
+ for(const [key,label] of entries)sel.add(new Option(label,key));
+ if(entries.some(([key])=>key===current))sel.value=current;
+}
+function applyTowerMapFilters(){if(towerMap)renderTowerMap();}
+function clearTowerMapFilters(){
+ for(const id of ['mapFilterCarrier','mapFilterNetwork','mapFilterEnb']){const el=document.getElementById(id);if(el)el.value='';}
+ if(towerMap)renderTowerMap();
+}
 function updateTowerSearchHighlights(){
  if(!towerMap)return;
+ let visible=0;
  towerMarkers.forEach(m=>{
-  const match=!!m._towerSearchKeys?.some(k=>mapTowerSearchMatches.has(k));
-  const show=!mapTowerSearchActive||match;
+  const keys=m._towerSearchKeys||[];
+  const match=!mapTowerSearchActive||keys.some(k=>mapTowerSearchMatches.has(k));
+  const filterMatch=(m._towerVisibleRecords||[]).length>0;
+  const show=match&&filterMatch;
   if(show){
+   visible++;
    if(!towerMap.hasLayer(m))m.addTo(towerMap);
    const el=m.getElement();
    if(el){el.style.filter=mapTowerSearchActive?'drop-shadow(0 0 6px #16c784)':'';el.style.opacity='1';}
   }else if(towerMap.hasLayer(m))towerMap.removeLayer(m);
  });
+ const status=document.getElementById('mapFilterStatus');if(status)status.textContent=visible+' of '+towerMarkers.length+' map sites visible · eNB filter hides labels, not tower locations';
 }
 function clearTowerMapSearch(){
  const input=document.getElementById('mapTowerSearch');if(input)input.value='';
  mapTowerSearchActive=false;mapTowerSearchMatches.clear();
  document.getElementById('mapTowerSearchResults')?.replaceChildren();
  const status=document.getElementById('mapTowerSearchStatus');if(status)status.textContent='Search cleared. All map pins are visible.';
- updateTowerSearchHighlights();
+ renderTowerMap();
 }
 function searchTowersOnMap(){
  const terms=mapTowerTerms(),status=document.getElementById('mapTowerSearchStatus'),out=document.getElementById('mapTowerSearchResults');out.replaceChildren();mapTowerSearchMatches.clear();
- if(!terms.length){mapTowerSearchActive=false;status.textContent='Enter one or more tower names, PLMNs, eNBs or Cell IDs.';updateTowerSearchHighlights();return;}
+ if(!terms.length){mapTowerSearchActive=false;status.textContent='Enter one or more tower names, PLMNs, eNBs or Cell IDs.';renderTowerMap();return;}
  if(!DB?.records){status.textContent='Registry is not loaded.';return;}
  mapTowerSearchActive=true;
  const matches=DB.records.filter(r=>terms.some(t=>mapTowerMatches(r,t)));
- matches.forEach(r=>mapTowerSearchMatches.add(keyOf(r)));updateTowerSearchHighlights();
+ matches.forEach(r=>mapTowerSearchMatches.add(keyOf(r)));renderTowerMap();
  const located=matches.filter(r=>{const e=getEffectiveRecord(r);return validCoord(e.latitude,-90,90)&&validCoord(e.longitude,-180,180)});
  status.textContent=matches.length+' matching records; '+located.length+' mapped. Only matching pins are shown in their carrier colors. Tap a result to zoom.';
  if(located.length&&towerMap){const pts=located.map(r=>{const e=getEffectiveRecord(r);return [Number(e.latitude),Number(e.longitude)]});if(pts.length===1)towerMap.setView(pts[0],15);else towerMap.fitBounds(L.latLngBounds(pts),{padding:[30,30],maxZoom:14});}
@@ -1322,6 +1399,7 @@ function renderUnmappedTowerList(){
 function renderTowerMap(){
  if(!towerMap||!DB)return;
  renderUnmappedTowerList();
+ refreshMapCarrierFilter();
  towerMarkers.forEach(m=>m.remove());
  towerMarkers=[];
  activeMapEditMarker=null;
@@ -1340,20 +1418,30 @@ function renderTowerMap(){
    site.push(entry);
  }
  for(const site of sites){
+   // Filter at the record level, not just the physical-site level. A colocated
+   // marker must display ONLY matching carrier IDs and matching carrier colors.
+   const displaySite=site.filter(e=>mapFilterMatches(e.record,true)&&(!mapTowerSearchActive||mapTowerSearchMatches.has(keyOf(e.record))));
+   const visibleSite=displaySite.length?displaySite:site;
+   const labelSite=visibleSite.filter(e=>mapFilterMatches(e.record));
    const selected=site.find(e=>activeMapEditRecord&&keyOf(activeMapEditRecord)===keyOf(e.record));
    const anchor=selected||site[0];
    const colocated=site.length>1&&site.some(e=>!sameMapCarrier(site[0],e));
-   const icon=colocated?colocatedTowerIcon(site):carrierMapIcon(anchor.record);
+   const visibleColocated=visibleSite.length>1&&visibleSite.some(e=>!sameMapCarrier(visibleSite[0],e));
+   const icon=visibleColocated?colocatedTowerIcon(visibleSite):carrierMapIcon(visibleSite[0].record);
+   const idLabels=[...new Set(labelSite.map(e=>String(e.effective.eNB||e.record.eNB||e.effective.gNB||e.record.gNB||'').trim()).filter(Boolean))];
+   const mapIdLabel=idLabels.join(', ');
    // Render at the exact saved location: no forced separation or minimum spacing.
    const position=[anchor.latitude,anchor.longitude];
    // Shared multicarrier tower is not draggable: moving it would silently move unrelated carriers.
    // Individual towers remain draggable, including manually combined same-carrier sites.
    const siteKeys=site.map(e=>keyOf(e.record));
-   const marker=L.marker(position,{draggable:false,autoPan:true,icon}).addTo(towerMap);
+   const marker=L.marker(position,{draggable:false,autoPan:false,icon}).addTo(towerMap);
+   if(mapIdLabel){marker.bindTooltip(esc(mapIdLabel),{permanent:true,direction:'right',offset:visibleColocated?[8,-24]:[6,-16],opacity:.96,className:'tower-enb-label',interactive:false});}
    marker._towerMoveKeys=siteKeys;
    if(!colocated&&armedTowerMoveKeys&&siteKeys.some(k=>armedTowerMoveKeys.includes(k)))marker.dragging.enable();
-   const heading=colocated?'Colocated site · '+siteCarrierGroups(site).size+' carriers ('+site.length+' eNB/gNB records)':site.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+site.length+' records)';
-   const entries=site.map((entry,i)=>{
+   const heading=visibleColocated?'Colocated site · '+siteCarrierGroups(visibleSite).size+' carriers ('+visibleSite.length+' eNB/gNB records)':visibleSite.length===1?esc(anchor.effective.site||anchor.record.site||'Unnamed tower'):esc(anchor.effective.site||anchor.record.site||'Tower site')+' ('+visibleSite.length+' records)';
+   const popupSite=document.getElementById('mapFilterEnb')?.value.trim()?labelSite:visibleSite;
+   const entries=popupSite.map((entry,i)=>{
      const r=entry.record,er=entry.effective;
      const towerId=er.eNB||r.eNB||er.gNB||r.gNB||'Not recorded';
      const idLabel=(er.eNB||r.eNB)?'LTE eNB':'5G gNB';
@@ -1364,9 +1452,10 @@ function renderTowerMap(){
        '<div><b>Bands:</b> '+esc(er.bands||r.bands||'Not recorded')+'</div></div>';
    }).join('');
    marker.bindPopup('<div style="min-width:215px;max-height:300px;overflow-y:auto;line-height:1.5;color:#172033">'+
-     '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+entries+
-     (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:true,closeButton:true});
+     '<div style="font-weight:800;font-size:16px;margin-bottom:5px">'+heading+'</div>'+(entries||'<div>No eNB/gNB at this site matches the number filter.</div>')+
+     (selected?'<div><b>Drag to move selected tower only</b></div>':'')+'</div>',{maxWidth:350,autoPan:false,closeButton:true});
    marker.on('click',()=>{
+     if(marker.dragging?.enabled())return;
      if(mapPinTapped(site,marker)){marker.closePopup();return;}
      marker.openPopup();
    });
@@ -1386,7 +1475,7 @@ function renderTowerMap(){
      edit.style.cssText='display:block;width:100%;margin-top:6px;padding:8px';
      edit.addEventListener('click',()=>{
        marker.closePopup();showMapLocationControls(site[0].record);
-       document.getElementById('mapEditCard')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+       document.getElementById('towerMap')?.scrollIntoView({behavior:'smooth',block:'nearest'});
      });
      if(!colocated){
        const move=document.createElement('button');move.type='button';
@@ -1394,19 +1483,95 @@ function renderTowerMap(){
        move.style.cssText='display:block;width:100%;margin-top:6px;padding:8px;background:#186f49;color:white';
        move.addEventListener('click',()=>{
          if(marker.dragging.enabled()){
-           marker.dragging.disable();armedTowerMoveKeys=null;
-           marker.closePopup();toast('Tower move canceled. Map scrolling is safe.');
+           marker.dragging.disable();armedTowerMoveKeys=null;mapMoveDraftKeys=null;
+           marker.closePopup();toast('Tower unlocked mode canceled. Staged moves can be canceled separately.');
          }else{
            towerMarkers.forEach(m=>m.dragging?.disable());
            armedTowerMoveKeys=siteKeys.slice();
            marker.dragging.enable();
+           mapMoveDraftKeys=siteKeys.slice();
+           updateMapDragSaveControls();
            marker.closePopup();
-           toast('Tower unlocked. Drag it to the new location; it locks again when released.');
+           toast('Move mode active. Drag repeatedly, then tap Save All Map Moves.');
          }
        });
        actions.appendChild(move);
      }
-     actions.append(combine,colocate,edit);content.appendChild(actions);
+     // Individual map management: preserve registry identity and all metadata.
+     // Detaching a record clears both group memberships; it does not delete the record.
+     function manageIndividualMapRecord(record,mode){
+       if(!DB || !record || record.__delete)return;
+       const identity=keyOf(record);
+       const idx=DB.records.findIndex(r=>keyOf(r)===identity);
+       if(idx<0){alert('Tower record not found. Nothing changed.');return;}
+       const original=cloneRecord(DB.records[idx]);
+       const name=(record.radio==='LTE'?'eNB ':'gNB ')+String(record.eNB||record.gNB||'');
+       if(mode==='unlocated' && !confirm('Move '+name+' to Towers without map locations? The tower stays in Registry; only its map location and pin groups are cleared.'))return;
+       if(mode==='separate' && !confirm('Separate '+name+' into its own movable map pin? Other tower records will not change.'))return;
+       const next={...DB.records[idx]};
+       delete next.mapPinGroup;
+       delete next.mapColocationGroup;
+       if(mode==='unlocated'){
+         delete next.latitude;
+         delete next.longitude;
+       }
+       next._syncModifiedAt=Math.max(Date.now(),Number(next._syncModifiedAt||0)+1);
+       DB.records[idx]=next;
+       try{saveLocal(mode==='unlocated'?'Unlocate '+name:'Separate map pin '+name);}
+       catch(err){DB.records[idx]=original;alert('Unable to save map change: '+String(err?.message||err));return;}
+       // Staged edits must not reapply the previous location or groups.
+       const staged=pendingTowerChanges[identity];
+       if(staged){
+         for(const k of ['latitude','longitude','mapPinGroup','mapColocationGroup'])delete staged.changes[k];
+         if(!Object.keys(staged.changes).length)delete pendingTowerChanges[identity];
+       }
+       marker.closePopup();
+       refreshPendingChangesUI();
+       renderTowerMap();
+       renderUnmappedTowerList();
+       scheduleCloudSync(200);
+       if(mode==='separate'){
+         // Launch the existing single-record location editor, which supplies
+         // a draggable preview and an explicit Save Location operation.
+         showMapLocationControls(DB.records[idx]);
+         const lat=Number(original.latitude),lon=Number(original.longitude);
+         if(validCoord(lat,-90,90)&&validCoord(lon,-180,180)){
+           stageTowerLocationChange(DB.records[idx],lat,lon,'separate');
+           towerMap.setView([lat,lon],Math.max(towerMap.getZoom(),17));
+         }
+         toast('Separated '+name+'. Drag the preview marker, then tap Save Location.');
+       }else toast(name+' moved to Towers without map locations. Syncing…');
+     }
+     // Individual record actions: never delete the whole colocated site.
+     const recordPanel=document.createElement('div');
+     recordPanel.style.cssText='border-top:1px solid #d6dbe2;margin-top:8px;padding-top:8px';
+     const recordToggle=document.createElement('button');recordToggle.type='button';
+     recordToggle.textContent='Manage one eNB / gNB ▾';
+     recordToggle.style.cssText='display:block;width:100%;padding:8px';
+     const recordChoices=document.createElement('div');recordChoices.hidden=true;
+     recordToggle.addEventListener('click',()=>{
+       recordChoices.hidden=!recordChoices.hidden;
+       recordToggle.textContent=recordChoices.hidden?'Manage one eNB / gNB ▾':'Hide individual tower options ▴';
+     });
+     for(const entry of site){
+       const record=entry.record;
+       if(getEffectiveRecord(record).__delete)continue;
+       const kind=record.radio==='LTE'?'eNB':'gNB';
+       const id=String(record.eNB||record.gNB||'');
+       const label=String(record.carrier||'Unknown')+' · '+kind+' '+id;
+       for(const [mode,title] of [['separate','Separate & move on map'],['unlocated','Move to Towers without location']]){
+         const single=document.createElement('button');single.type='button';
+         single.textContent=title+' · '+label;
+         single.style.cssText='display:block;width:100%;margin-top:6px;padding:8px;white-space:normal';
+         single.addEventListener('click',()=>manageIndividualMapRecord(record,mode));
+         recordChoices.appendChild(single);
+       }
+     }
+     const recordHint=document.createElement('div');recordHint.style.cssText='font-size:12px;margin-top:6px';
+     recordHint.textContent='Neither option deletes a registry record. Separate opens a draggable location preview; unlocated clears coordinates. Other IDs and carriers stay unchanged.';
+     recordChoices.appendChild(recordHint);
+     recordPanel.append(recordToggle,recordChoices);
+     actions.append(combine,colocate,edit,recordPanel);content.appendChild(actions);
    });
    if(colocated && site.some(e=>e.record.mapColocationGroup)){
      marker.on('popupopen',ev=>{
@@ -1458,18 +1623,51 @@ function renderTowerMap(){
    // Move only the records represented by this one carrier pin; never another carrier.
    marker.on('dragstart',()=>{ if(!marker.dragging.enabled())return; marker.closePopup(); });
    marker.on('dragend',ev=>{
-     marker.dragging.disable();
-     armedTowerMoveKeys=null;
      const ll=ev.target.getLatLng();
-     persistDraggedCarrierPin(site,ll.lat,ll.lng,marker);
+     for(const entry of site)stageExistingTowerChange(entry.record,{latitude:Number(ll.lat).toFixed(6),longitude:Number(ll.lng).toFixed(6)},'Map location move');
+     mapMoveDraftKeys=siteKeys.slice();
+     armedTowerMoveKeys=siteKeys.slice();
+     updateMapDragSaveControls();
+     toast('New position staged. Drag again or tap Save All Map Moves.');
    });
-   if(selected){activeMapEditMarker=marker;marker.openPopup();}
+   // Do not reopen the previously edited tower on every registry/cloud refresh: Leaflet auto-pan would snap the viewport back.
+   if(selected)activeMapEditMarker=marker;
    marker._towerSearchKeys=site.map(e=>keyOf(e.record));
+   marker._towerSiteRecords=site.map(e=>e.record);
+   marker._towerVisibleRecords=displaySite.map(e=>e.record);
    towerMarkers.push(marker);
  }
  updateTowerSearchHighlights();
+ updateMapDragSaveControls();
  const status=document.getElementById('mapStatus');
- if(status)status.textContent=`${sites.length} map tower icon${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Tap a tower and choose Move this tower to unlock dragging. Dragging locks again after release. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
+ if(status)status.textContent=`${sites.length} map tower icon${sites.length===1?'':'s'} for ${located} saved tower location${located===1?'':'s'}. ${DB.records.length-located} records lack valid coordinates. Tap a tower and choose Move this tower to unlock dragging. Dragging stays unlocked until you save or cancel. To group pins, tap Combine Pins and select two pins on the map. Different carriers cannot combine.`;
+}
+
+function updateMapDragSaveControls(){
+ const el=document.getElementById('mapDragSaveControls');
+ if(!el)return;
+ const pending=Object.values(pendingTowerChanges||{}).filter(x=>x?.description==='Map location move').length;
+ el.classList.toggle('hidden',!pending&&!mapMoveDraftKeys);
+ const status=document.getElementById('mapDragSaveStatus');
+ if(status)status.textContent=pending?`${pending} tower record(s) staged. Drag again freely; tap Save All Map Moves to commit.`:'Drag freely. Nothing is saved until Save All Map Moves.';
+}
+function saveAllMapMoves(){
+ const pending=Object.values(pendingTowerChanges||{}).filter(x=>x?.description==='Map location move');
+ if(!pending.length){toast('No map moves to save.');return;}
+ armedTowerMoveKeys=null;mapMoveDraftKeys=null;
+ saveAllPendingChanges();
+ updateMapDragSaveControls();
+}
+function cancelAllMapMoves(){
+ for(const [key,item] of Object.entries(pendingTowerChanges||{})){
+   if(item?.description==='Map location move'){
+     delete item.changes.latitude;delete item.changes.longitude;
+     if(!Object.keys(item.changes).length)delete pendingTowerChanges[key];
+   }
+ }
+ armedTowerMoveKeys=null;mapMoveDraftKeys=null;
+ refreshPendingChangesUI();renderTowerMap();updateMapDragSaveControls();
+ toast('Unsaved map moves canceled.');
 }
 
 // Save a dragged marker as one atomic edit for the records represented by
@@ -1889,6 +2087,7 @@ function saveAllPendingChanges(){
     saveLocal('Save All tower changes');
 
     pendingTowerChanges={};
+    armedTowerMoveKeys=null;mapMoveDraftKeys=null;
     refreshPendingChangesUI();
 
     window._currentUnknownScanFields=null;
@@ -1927,6 +2126,7 @@ function discardAllPendingChanges(){
  }
  if(!confirm('Discard all unsaved changes to existing towers?'))return;
  pendingTowerChanges={};
+ armedTowerMoveKeys=null;mapMoveDraftKeys=null;
  refreshPendingChangesUI();
  if(towerMap)renderTowerMap();
  renderRegistry();
@@ -2038,18 +2238,18 @@ function colocatedTowerIcon(site){
  }).join('');
  const badge='<circle cx="27" cy="27" r="15" fill="#132033" stroke="white" stroke-width="2"/><text x="27" y="32" fill="white" font-size="15" font-weight="800" text-anchor="middle">'+n+'</text>';
  const tower='<g stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M27 52 L17 78 M27 52 L37 78 M19 70 H35 M22 61 H32"/></g><g stroke="#293447" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M27 52 L17 78 M27 52 L37 78 M19 70 H35 M22 61 H32"/></g>';
- const html='<svg width="54" height="82" viewBox="0 0 54 82" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Colocated tower, '+n+' carriers, '+site.length+' tower records"><circle cx="27" cy="27" r="25" fill="white"/>'+sectors+badge+tower+'</svg>';
- return L.divIcon({className:'',html,iconSize:[54,82],iconAnchor:[27,78],popupAnchor:[0,-70]});
+ const html='<svg width="36" height="55" viewBox="0 0 54 82" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Colocated tower, '+n+' carriers, '+site.length+' tower records"><circle cx="27" cy="27" r="25" fill="white"/>'+sectors+badge+tower+'</svg>';
+ return L.divIcon({className:'',html,iconSize:[36,55],iconAnchor:[18,52],popupAnchor:[0,-50]});
 }
 function carrierMapIcon(record){
  const plmn=(typeof registryPlmnForRecord==='function') ? registryPlmnForRecord(record) : (record.plmn||'');
  const color=carrierMapColor(record.carrier,plmn);
  return L.divIcon({
    className:'',
-   html:`<svg width="40" height="48" viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg" aria-label="Cell tower"><g stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M20 5 L6 44 M20 5 L34 44 M10 33 H30 M14 23 H26 M6 44 H34"/></g><g stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M20 5 L6 44 M20 5 L34 44 M10 33 H30 M14 23 H26 M6 44 H34 M12 5 Q4 12 12 19 M28 5 Q36 12 28 19"/></g><circle cx="20" cy="5" r="4" fill="${color}" stroke="white" stroke-width="1.5"/></svg>`,
-   iconSize:[40,48],
-   iconAnchor:[20,44],
-   popupAnchor:[0,-42]
+   html:`<svg width="26" height="32" viewBox="0 0 40 48" xmlns="http://www.w3.org/2000/svg" aria-label="Cell tower"><g stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M20 5 L6 44 M20 5 L34 44 M10 33 H30 M14 23 H26 M6 44 H34"/></g><g stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M20 5 L6 44 M20 5 L34 44 M10 33 H30 M14 23 H26 M6 44 H34 M12 5 Q4 12 12 19 M28 5 Q36 12 28 19"/></g><circle cx="20" cy="5" r="4" fill="${color}" stroke="white" stroke-width="1.5"/></svg>`,
+   iconSize:[26,32],
+   iconAnchor:[13,30],
+   popupAnchor:[0,-30]
  });
 }
 
@@ -2316,6 +2516,21 @@ function universalLookup(){
  if(summary)summary.textContent=`${found.length} matching registry record${found.length===1?'':'s'}.`;
 
  if(!found.length){
+   // A deleted identifier is not an unknown tower. Tombstones remain in
+   // local/cloud data to prevent older replicas from resurrecting a deletion.
+   const deletedMatches=(DB.records||[]).filter(base=>{
+     const effective=(typeof getEffectiveRecord==='function')?getEffectiveRecord(base):base;
+     if(!effective?.__delete)return false;
+     return [base.eNB,base.gNB,base.cell_id,effective.eNB,effective.gNB,effective.cell_id]
+       .some(v=>String(v??'').trim()===raw);
+   });
+   if(raw && deletedMatches.length){
+     out.innerHTML=`<div class="card result"><h2>DELETED / INACTIVE RECORD</h2>
+       <div>${deletedMatches.length} saved deletion marker${deletedMatches.length===1?'':'s'} for identifier <b>${esc(raw)}</b>.</div>
+       <div style="margin-top:8px">These records are intentionally excluded from active Lookup and Map results. The markers are retained to protect against restoration from older cloud copies.</div>
+       <div style="margin-top:8px">If the tower reappears as active on another device, the cloud sync backend needs inspection.</div></div>`;
+     return;
+   }
    if(/^\d+$/.test(raw)){
      const n=BigInt(raw);
      const enb=(n/256n).toString(),sector=(n%256n).toString();
@@ -3517,17 +3732,51 @@ function renderRegistry(){
  <div class="record-actions"><button class="secondary" onclick='editRecord(${JSON.stringify(keyOf(r))})'>Edit</button><button class="danger" onclick='deleteRecord(${JSON.stringify(keyOf(r))})'>Delete</button></div>
  </div>`).join('') || '<div class="muted" style="padding:12px">No matching towers.</div>';
 }
+// Carrier and PLMN are linked in both directions. Do not touch tower IDs or records.
+function registryCarrierPlmnPairs(){
+ const pairs=new Map();
+ for(const [carrier,plmn] of Object.entries(PLMNS))pairs.set(String(plmn),carrier);
+ for(const [plmn,carrier] of Object.entries(DB?.plmns||{})){
+  if(/^\d{5,6}$/.test(String(plmn)) && String(carrier||'').trim()){
+   if(!pairs.has(String(plmn)))pairs.set(String(plmn),String(carrier).trim());
+  }
+ }
+ return pairs;
+}
 function syncPlmn(){
- const carrier=document.getElementById('fCarrier').value.trim();
+ const carrierInput=document.getElementById('fCarrier');
  const plmnInput=document.getElementById('fPlmn');
- if(!plmnInput)return;
- const known=PLMNS[carrier] || (DB ? Object.entries(DB.plmns||{}).find(([p,n])=>n===carrier)?.[0] : '');
- if(known && (!plmnInput.value || plmnInput.dataset.auto==='1')){
-   plmnInput.value=known;
-   plmnInput.dataset.auto='1';
- }else if(!known && plmnInput.dataset.auto==='1'){
-   plmnInput.value='';
-   plmnInput.dataset.auto='0';
+ if(!carrierInput||!plmnInput)return;
+ carrierInput.dataset.auto='0';
+ const carrier=carrierInput.value.trim().toLowerCase();
+ if(!carrier){
+  if(plmnInput.dataset.auto==='1'){plmnInput.value='';plmnInput.dataset.auto='0';}
+  return;
+ }
+ let match=Object.entries(PLMNS).find(([name])=>name.toLowerCase()===carrier);
+ let known=match?.[1]||'';
+ if(!known){
+  const entry=Object.entries(DB?.plmns||{}).find(([p,name])=>String(name||'').trim().toLowerCase()===carrier);
+  known=entry?.[0]||'';
+ }
+ // A selected carrier is an explicit choice. Update its PLMN, even when the
+ // old PLMN was entered manually. Unknown carrier names do not erase a PLMN.
+ if(known){plmnInput.value=known;plmnInput.dataset.auto='1';}
+}
+function syncCarrierFromPlmn(){
+ const carrierInput=document.getElementById('fCarrier');
+ const plmnInput=document.getElementById('fPlmn');
+ if(!carrierInput||!plmnInput)return;
+ plmnInput.dataset.auto='0';
+ const plmn=plmnInput.value.trim();
+ const carrier=registryCarrierPlmnPairs().get(plmn);
+ if(carrier){
+  carrierInput.value=carrier;
+  carrierInput.dataset.auto='1';
+ }else if(carrierInput.dataset.auto==='1'){
+  // Do not leave a carrier inferred from a different PLMN.
+  carrierInput.value='';
+  carrierInput.dataset.auto='0';
  }
 }
 function updateIdLabel(){document.getElementById('idLabel').textContent=document.getElementById('fRadio').value==='LTE'?'eNB':'gNB';calcFormIds()}
@@ -3573,9 +3822,11 @@ function autofillTowerById(){
  // Prefer the currently selected radio type, but if there is no match,
  // try both LTE and 5G because the user may type the ID before choosing radio.
  let radio=document.getElementById('fRadio').value;
+ const currentCarrier=document.getElementById('fCarrier').value.trim();
+ const currentPlmn=document.getElementById('fPlmn').value.trim();
  let matches=DB.records.filter(r=>{
    const rid=String(r.eNB||r.gNB||'');
-   return rid===id;
+   return rid===id && !r.__delete;
  });
 
  if(matches.length===0){
@@ -3585,15 +3836,19 @@ function autofillTowerById(){
 
  // If multiple carriers somehow share the same numeric ID, prefer current carrier/radio.
  let rec=
-   matches.find(r=>r.radio===radio && r.carrier===document.getElementById('fCarrier').value.trim()) ||
+   matches.find(r=>r.radio===radio && currentPlmn && String(r.plmn||'')===currentPlmn) ||
+   matches.find(r=>r.radio===radio && currentCarrier && r.carrier===currentCarrier) ||
+   matches.find(r=>r.radio===radio && r.carrier) ||
    matches.find(r=>r.radio===radio) ||
    matches[0];
 
- document.getElementById('fCarrier').value=rec.carrier||'';
+ // Never blank a typed carrier because a legacy record lacks its carrier name.
+ const resolvedCarrier=String(rec.carrier||DB.plmns?.[rec.plmn]||DB.plmns?.[currentPlmn]||currentCarrier||'').trim();
+ if(resolvedCarrier){document.getElementById('fCarrier').value=resolvedCarrier;document.getElementById('fCarrier').dataset.auto='1';}
  document.getElementById('fRadio').value=rec.radio||'LTE';
  updateIdLabel();
 
- const plmn=rec.plmn || (DB.plmns ? Object.entries(DB.plmns).find(([p,n])=>n===rec.carrier)?.[0] : '') || PLMNS[rec.carrier] || '';
+ const plmn=rec.plmn || currentPlmn || (DB.plmns ? Object.entries(DB.plmns).find(([p,n])=>n===resolvedCarrier)?.[0] : '') || PLMNS[resolvedCarrier] || '';
  document.getElementById('fPlmn').value=plmn;
  document.getElementById('fPlmn').dataset.auto='1';
 
@@ -3620,8 +3875,8 @@ function autofillTowerById(){
  }
 
  if(status){
-   const extra=matches.length>1 ? ` (${matches.length} records share this numeric ID; selected ${rec.carrier} ${rec.radio}.)` : '';
-   status.textContent=`Existing tower found: ${rec.site} · ${rec.carrier} · ${rec.radio}.${extra}`;
+   const extra=matches.length>1 ? ` (${matches.length} records share this numeric ID; selected ${resolvedCarrier||'carrier unknown'} ${rec.radio}.)` : '';
+   status.textContent=`Existing tower found: ${rec.site} · ${resolvedCarrier||'carrier unknown'} · ${rec.radio}.${extra}`;
  }
 }
 
@@ -3692,8 +3947,18 @@ function saveRecordOnce(){
 function coreSaveRecord(){
  const isNewRecord=!document.getElementById('editKey').value.trim();
  if(!DB)return false;
- const carrier=document.getElementById('fCarrier').value,radio=document.getElementById('fRadio').value,id=document.getElementById('fId').value.trim(),site=document.getElementById('fSite').value.trim();
+ const carrier=document.getElementById('fCarrier').value,radio=document.getElementById('fRadio').value;let id=document.getElementById('fId').value.trim();const site=document.getElementById('fSite').value.trim();
  if(!id||!site){toast('Tower ID and site name are required.');return false}
+ if(!carrier.trim()){toast('Carrier name is required. Select or enter the carrier before saving.');document.getElementById('fCarrier').focus();return false}
+ const parsedFormId=parseTowerIdentity(id);
+ if(!parsedFormId){toast('Use a whole-number eNB/gNB, optionally :sector. Decimals are not valid.');return false;}
+ if(parsedFormId.local){
+   const localField=document.getElementById('fLocal');
+   if(localField.value.trim() && localField.value.trim()!==parsedFormId.local){toast('Tower ID suffix disagrees with local cell.');return false;}
+   localField.value=parsedFormId.local;
+ }
+ id=parsedFormId.id;
+ document.getElementById('fId').value=id;
  const oldKey=document.getElementById('editKey').value;
  const newKey=`${carrier}|${radio}|${id}`;
  const existingIndex=DB.records.findIndex(r=>keyOf(r)===newKey);
@@ -4219,7 +4484,7 @@ function findExistingScanTower(carrier,radio,sid){
    String(r.radio||'').trim().toUpperCase()===wantRadio &&
    String(r.eNB||r.gNB||'').replace(/\D/g,'')===id
  );
- return matches.length===1 ? matches[0] : null;
+ return matches.length===1 && !matches[0].__delete ? matches[0] : null;
 }
 
 function autoAddScannedBandToExistingTower(baseRecord,fields){
@@ -4715,7 +4980,7 @@ function identifyFromScan(fields){
 </div>
  ${radio==='5G'?forcedKnownLteBanner(fields):''}
  ${fields._registryIdentityMatched?'<div class="notice" style="margin-top:10px"><b>Registry identity:</b> Cell ID math matched this saved tower. Saved carrier/PLMN/site override the hotspot operator label.</div>':''}
- <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
+ <div style="margin-top:10px"><b>Math:</b> ${esc(math)}${scanIdentifierMathDetails(fields)}${scanDualRadioMathDetails(fields)}</div>
  
  ${rec?.notes?'<div class="small" style="margin-top:8px">'+esc(rec.notes)+'</div>':''}
  ${unknownAddButton}
@@ -5414,8 +5679,11 @@ function enrichSparseLteScan(fields){
 }
 
 
+let scanRestoreExplicitlyRequested=false;
 let activeScanRecordKey='';
 let scanSaveAllBusy=false;
+let scanAutoSaveTimer=null;
+let scanAutoSaveQueued=false;
 
 function resetScanSaveAllState(){
  scanSaveAllBusy=false;
@@ -5427,6 +5695,8 @@ function resetScanSaveAllState(){
    btn.removeAttribute('aria-busy');
  }
  if(st)st.textContent='';
+ clearTimeout(scanAutoSaveTimer);
+ scanAutoSaveQueued=false;
 }
 
 function currentScanEditFields(){
@@ -5441,13 +5711,45 @@ function currentScanEditFields(){
    bandwidth:(document.getElementById('sBw')?.value||'').trim(),
    pci:(document.getElementById('sPci')?.value||'').trim(),
    tac:(document.getElementById('sTac')?.value||'').trim(),
+   notes:(document.getElementById('sNotes')?.value||''),
    rsrp:(document.getElementById('sRsrp')?.value||'').trim(),
    rsrq:(document.getElementById('sRsrq')?.value||'').trim(),
-   snr:(document.getElementById('sSnr')?.value||'').trim()
+   snr:(document.getElementById('sSnr')?.value||'').trim(),
+   status:(document.getElementById('sStatus')?.value||'unknown')
  };
 }
 
+// User-initiated Scan edits only. OCR filling fields programmatically does not trigger autosave.
+function queueScanAutoSave(){
+ clearTimeout(scanAutoSaveTimer);
+ scanAutoSaveQueued=true;
+ const st=document.getElementById('scanSaveAllStatus');
+ if(st)st.textContent='Unsaved edit • waiting for you to finish typing…';
+ scanAutoSaveTimer=setTimeout(flushScanAutoSave,1100);
+}
+function flushScanAutoSave(){
+ if(!scanAutoSaveQueued)return;
+ if(scanSaveAllBusy){scanAutoSaveTimer=setTimeout(flushScanAutoSave,350);return;}
+ scanAutoSaveQueued=false;
+ saveAllScanEdits();
+}
+function installScanAutoSave(){
+ const root=document.getElementById('scanResults');
+ if(!root||root.dataset.autoSaveInstalled==='1')return;
+ root.dataset.autoSaveInstalled='1';
+ const ids=new Set(['sSite','sPlmn','sRadio','sCell','sId','sLocal','sBand','sBw','sPci','sTac','sRsrp','sRsrq','sSnr','sStatus','sNotes']);
+ root.addEventListener('input',e=>{if(ids.has(e.target?.id))queueScanAutoSave();});
+ root.addEventListener('change',e=>{if(ids.has(e.target?.id))queueScanAutoSave();});
+ root.addEventListener('focusout',e=>{if(ids.has(e.target?.id)&&scanAutoSaveQueued){clearTimeout(scanAutoSaveTimer);scanAutoSaveTimer=setTimeout(flushScanAutoSave,100);}});
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',installScanAutoSave);
+else installScanAutoSave();
+
 function saveAllScanEdits(){
+ const explicitRestore=scanRestoreExplicitlyRequested;
+ scanRestoreExplicitlyRequested=false;
+ clearTimeout(scanAutoSaveTimer);
+ scanAutoSaveQueued=false;
  if(scanSaveAllBusy)return false;
 
  const btn=document.getElementById('scanSaveAllBtn');
@@ -5463,7 +5765,14 @@ function saveAllScanEdits(){
    return false;
  }
 
- const carrier=(DB?.plmns?.[f.plmn])||'Unknown';
+ const parsedIdentity=parseTowerIdentity(f.sid);
+ if(!parsedIdentity){if(st)st.textContent='Invalid tower ID: enter a whole number, optionally followed by :sector. No decimals or rounding.';return false;}
+ if(parsedIdentity.local && f.local && BigInt(f.local).toString()!==parsedIdentity.local){if(st)st.textContent='Tower ID suffix and local cell disagree. Correct them before saving.';return false;}
+ f.sid=parsedIdentity.id;
+ if(parsedIdentity.local)f.local=parsedIdentity.local;
+ if(f.local && !/^[0-9]+$/.test(f.local)){if(st)st.textContent='Sector/local cell must be a whole number.';return false;}
+ const carrier=(DB?.plmns?.[f.plmn]);
+ if(!carrier){if(st)st.textContent='Not saved: enter a recognized PLMN first.';return false;}
 
  let rec=null;
  if(activeScanRecordKey){
@@ -5477,11 +5786,45 @@ function saveAllScanEdits(){
    return false;
  }
 
- const newKey=`${carrier}|${f.radio}|${f.sid}`;
- const conflict=DB.records.find(r=>r!==rec && keyOf(r)===newKey);
- if(conflict){
-   if(st)st.textContent='Save blocked: another registry record already uses this carrier + radio + ID.';
+ // Match the normalized identity, including legacy capitalization variants.
+ // Deleted LTE and 5G identities remain independent.
+ const canonicalCarrier=v=>String(v||'').trim().toLowerCase().replace(/[^a-z0-9]/g,'');
+ const matchesIdentity=r=>canonicalCarrier(r.carrier)===canonicalCarrier(carrier) &&
+   String(r.radio||'').toUpperCase()===f.radio.toUpperCase() &&
+   String(r.eNB||r.gNB||'')===f.sid;
+ const sameIdentity=DB.records.filter(matchesIdentity);
+ const activeMatches=sameIdentity.filter(r=>!r.__delete);
+ if(activeMatches.length>1){
+   if(st)st.textContent='Save blocked: multiple active records share this identity. Resolve duplicates first.';
    return false;
+ }
+ if(activeMatches.length===1)rec=activeMatches[0];
+ else if(sameIdentity.length && f.status!=='confirmed'){
+   if(st)st.textContent='This ID was deleted. Select Confirmed and tap Save All to restore this specific radio record.';
+   return false;
+ }else if(sameIdentity.length){
+   rec=sameIdentity[0];
+ }
+ // A changed identifier must never silently overwrite a different tower.
+ if(!matchesIdentity(rec) && !rec.__delete){
+   if(st)st.textContent='Tower identity changed. Add the new tower separately to avoid overwriting the old one.';
+   return false;
+ }
+ const restoring=!!rec.__delete;
+ // Explicit restoration only, not a passive OCR or auto-save event.
+ if(restoring && !explicitRestore){
+   if(st)st.textContent='Deleted record found. Select Confirmed, then tap Save All to restore it.';
+   return false;
+ }
+ if(restoring && f.status!=='confirmed'){
+   if(st)st.textContent='Select Confirmed before restoring a deleted record.';
+   return false;
+ }
+ // Remove redundant deletion markers for THIS carrier + radio + ID only.
+ // Never touch the LTE tombstone when restoring a 5G record.
+ if(restoring){
+   DB.records=DB.records.filter(r=>r===rec || !matchesIdentity(r) || !r.__delete);
+   delete rec.__delete;
  }
 
  scanSaveAllBusy=true;
@@ -5494,6 +5837,7 @@ function saveAllScanEdits(){
 
  // Save all editable scan fields to the matched record.
  rec.site=f.site;
+ rec.status=["confirmed","provisional","unknown"].includes(f.status)?f.status:"unknown";
  rec.carrier=carrier;
  rec.radio=f.radio;
  rec.plmn=f.plmn;
@@ -5508,19 +5852,14 @@ function saveAllScanEdits(){
  rec.local_cell=f.local;
  rec.pci=f.pci;
  rec.tac=f.tac;
+ rec.notes=f.notes;
  rec.rsrp=f.rsrp;
  rec.rsrq=f.rsrq;
  rec.snr=f.snr;
  rec.bandwidth=f.bandwidth;
 
- if(f.band){
-   if(typeof mergeBandIntoList==='function'){
-     const merged=mergeBandIntoList(rec.bands||'',f.band,f.radio);
-     rec.bands=merged.value||rec.bands||f.band;
-   }else{
-     rec.bands=f.band;
-   }
- }
+ // Scan editor is an editor, not an additive scan merge. Allow replacing or clearing bands.
+ rec.bands=f.band;
 
  saveLocal('scan tower + signal values saved');
  activeScanRecordKey=keyOf(rec);
@@ -5537,7 +5876,7 @@ function saveAllScanEdits(){
    btn.textContent='✓ Saved';
    btn.removeAttribute('aria-busy');
  }
- if(st)st.textContent='✓ All scan edits saved to the Registry.';
+ if(st)st.textContent='✓ Saved locally and queued for cloud sync. Check cloud status for confirmation.';
 
  setTimeout(()=>{
    scanSaveAllBusy=false;
@@ -5757,6 +6096,33 @@ function parseDualRadioSections(text){
      snr:parseNumericToken(sectionValue(lte,'SNR|SINR|SINR0|SNR0'))
    }
  };
+}
+
+// v136: Explain integer identifier math without altering saved tower identities.
+function scanIdentifierMathDetails(fields){
+ const f=fields||{}, raw=String(f.cell||'').replace(/\D/g,''), radio=String(f.radio||'').toUpperCase();
+ if(!/^\d+$/.test(raw)||!raw)return '';
+ const n=BigInt(raw);
+ if(radio==='LTE'){
+   const id=n/256n, local=n%256n;
+   return `<div style="margin-top:8px"><b>LTE exact calculation</b><div>Cell ID ${esc(raw)} ÷ 256 = eNB <b>${id}</b>, remainder <b>${local}</b></div><div>${esc(raw)} = (${id} × 256) + ${local} ✅</div><div>Display: <b>eNB ${id}:${local}</b> • stored ID: ${id} • sector: ${local}</div></div>`;
+ }
+ if(radio!=='5G')return '';
+ const candidate=n/4096n, local=n%4096n;
+ const savedId=String(f.sid||'').trim(), savedLocal=String(f.local||'').trim();
+ const explicit=/^\d+$/.test(savedId)&&/^\d+$/.test(savedLocal);
+ const consistent=explicit && BigInt(savedId)*4096n+BigInt(savedLocal)===n;
+ const source=String(f._resolutionSource||'');
+ const verified=consistent && (source==='exact-cell'||source==='derived-5g'||source==='registry-match');
+ return `<div style="margin-top:8px"><b>5G NCI calculation (12-bit local-cell candidate)</b><div>NCI ${esc(raw)} ÷ 4096 = gNB <b>${candidate}</b>, remainder <b>${local}</b></div><div>${esc(raw)} = (${candidate} × 4096) + ${local} ✅</div><div>Candidate display: <b>gNB ${candidate}:${local}</b></div><div class="small muted">${verified?'Matches the saved registry identity.':'Candidate only: confirm the gNB bit split or compare with a directly reported CellMapper gNB before saving. A valid calculation alone does not verify the tower ID.'}</div>${explicit&&!consistent?`<div class="small" style="color:#fbbf24">Saved/scanned gNB ${esc(savedId)}:${esc(savedLocal)} does not match this 12-bit NCI split. Do not overwrite automatically.</div>`:''}</div>`;
+}
+function scanDualRadioMathDetails(fields){
+ const d=fields?.dualRadioStats;
+ if(!d?.lte?.cell)return '';
+ const nstr=String(d.lte.cell).replace(/\D/g,'');
+ if(!nstr)return '';
+ const n=BigInt(nstr), id=n/256n, local=n%256n;
+ return `<div style="margin-top:8px"><b>LTE connection in same screenshot</b><div>Cell ID ${esc(nstr)} ÷ 256 = eNB <b>${id}</b>, remainder <b>${local}</b></div><div>${esc(nstr)} = (${id} × 256) + ${local} ✅</div><div>Display: <b>eNB ${id}:${local}</b></div><div class="small muted">Separate LTE identity. Do not merge with the 5G tower.</div></div>`;
 }
 
 function safe5gIdentifierMath(cell){
@@ -6578,6 +6944,8 @@ function identifyFromScan(fields){
  }
 
  let plmn=fields.plmn||'', radio=fields.radio||'LTE', raw=fields.cell||'', sid=fields.sid||'';
+ // Local cell is a separate integer field, never a decimal part of the tower ID.
+ let local=String(fields.local??'').trim();
 
  if(!plmn || !raw || !sid){
    const missing=[];
@@ -6654,6 +7022,7 @@ function identifyFromScan(fields){
    plmn=fields.plmn||plmn;
    radio=fields.radio||radio;
    sid=fields.sid||sid;
+   local=String(fields.local??'').trim();
    carrier=fields.carrier||DB.plmns[plmn]||carrier;
  }
 
@@ -6673,6 +7042,10 @@ function identifyFromScan(fields){
    scanSite.value=rec?.site||name||'';
  }
  resetScanSaveAllState();
+ const scanStatus=document.getElementById('sStatus');
+ if(scanStatus)scanStatus.value=['confirmed','provisional','unknown'].includes(rec?.status)?rec.status:'unknown';
+ const scanNotes=document.getElementById('sNotes');
+ if(scanNotes && document.activeElement!==scanNotes)scanNotes.value=rec?.notes||'';
 
  const rr=signalRating('rsrp',fields.rsrp),rq=signalRating('rsrq',fields.rsrq),sr=signalRating('snr',fields.snr);
  const vals=[]; if(fields.rsrp)vals.push(rr); if(fields.rsrq)vals.push(rq); if(fields.snr)vals.push(sr);
@@ -6758,8 +7131,8 @@ function identifyFromScan(fields){
  <div class="label">LTE/5G</div><div>${esc((fields?.dualRadioStats?.five?.cell&&fields?.dualRadioStats?.lte?.cell)?'5G + LTE':radio)}</div>
  <div class="label">Band</div><div>${esc(radio==='5G'?(sanitizeNrBand(fields.band)||'Unknown'):(fields.band||rec?.bands||'Unknown'))}</div>
  <div class="label">Bandwidth</div><div>${esc(fields.bw||rec?.bandwidth||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}</div>
- <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(radio==='5G'?'Unknown':(fields.local||'Unknown'))}</div>
+ <div class="label">${radio==='LTE'?'eNB':'gNB'}</div><div>${esc(sid||'Unknown')}${sid && /^\d+$/.test(String(sid)) && /^\d+$/.test(String(local||fields.local||'')) ? ':'+esc(String(local||fields.local)) : ''}</div>
+ <div class="label">${radio==='LTE'?'Sector/local cell':'Local cell'}</div><div>${esc(String(local||fields.local||'Unknown'))}</div>
  <div class="label">Cell ID/NCI</div><div>${esc(raw)}</div>
  <div class="label">PCI</div><div>${esc(fields.pci||'Unknown')}</div>
  <div class="label">TAC</div><div>${esc(fields.tac||'Unknown')} ${tacnote?'<span class="small muted">('+esc(tacnote)+')</span>':''}</div>
@@ -6789,7 +7162,7 @@ function identifyFromScan(fields){
  </div>
  ${radio==='5G'?sameCellKnownLteBanner(fields):''}
  ${radio==='5G'?forcedKnownLteBanner(fields):''}
- <div style="margin-top:10px"><b>Math:</b> ${esc(math)}</div>
+ <div style="margin-top:10px"><b>Math:</b> ${esc(math)}${scanIdentifierMathDetails(fields)}${scanDualRadioMathDetails(fields)}</div>
  
  </div>`;
 
@@ -7207,6 +7580,7 @@ function fillScanResults(x,text){
 
  resetScanSaveAllState();
  document.getElementById('sSite').value='';
+ document.getElementById('sNotes').value='';
  document.getElementById('sPlmn').value=x.plmn;
  document.getElementById('sRadio').value=x.radio;
  document.getElementById('sCell').value=x.cell;
